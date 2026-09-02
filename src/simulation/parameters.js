@@ -1,9 +1,8 @@
 // ============================================================
-// PARÁMETROS DEL SISTEMA DE FUERZAS
+// PARÁMETROS DEL SISTEMA DE OLEAJE
 // ============================================================
-// Todos los parámetros son "uniformes": valores que viven en la CPU
-// pero son accesibles desde el shader de cómputo en la GPU.
-// Cambiar .value no recompila el shader.
+// Enfoque: "Respiración orgánica + ondas de presión"
+// Las partículas se mueven como un campo de ondas expansivas
 // ============================================================
 
 import * as THREE from 'three/webgpu';
@@ -12,87 +11,63 @@ import { uniform } from 'three/tsl';
 export function createParameters() {
   return {
     // ==========================================================
-    // CONFIGURACIÓN GENERAL DE LA SIMULACIÓN
+    // CONFIGURACIÓN GENERAL
     // ==========================================================
-
-    /** Paso de tiempo (segundos por frame). Valor típico: 1/60 */
     dt: uniform(1 / 60),
-
-    /** Escala de tiempo global. 1.0 = tiempo real, >1 = más rápido */
     timeScale: uniform(1.0),
-
-    /** Velocidad inicial de las partículas al resetear */
-    initialSpeed: uniform(0.35),
-
-    /** Velocidad máxima permitida (clamp) */
-    maxSpeed: uniform(5.0),
-
-    /** Tamaño del espacio de simulación (bounding box) */
-    boundsSize: uniform(10.0),
-
-    /** Tamaño de cada partícula en pantalla */
-    particleSize: uniform(0.035),
+    initialSpeed: uniform(0.2),
+    maxSpeed: uniform(4.0),
+    boundsSize: uniform(12.0),
+    particleSize: uniform(0.04),
 
     // ==========================================================
-    // FUERZA 1: VIENTO (Fuerza constante)
+    // ONDA DE PRESIÓN (fuerza principal)
     // ==========================================================
-    // 📐 F = c (vector constante)
-    //   Acelera todas las partículas en una dirección fija.
+    // 📐 F_onda = A * sin(ω*t - k*r) * r̂
+    //   Genera ondas expansivas desde el punto de impacto
     // ==========================================================
-
-    /** 0 = desactivado, 1 = activado */
-    windEnabled: uniform(0.0),
-
-    /** Vector de viento (dirección y magnitud) */
-    wind: uniform(new THREE.Vector3(0.0, 0.0, 0.0)),
-
-    // ==========================================================
-    // FUERZA 2: RADIAL (Atracción / Repulsión)
-    // ==========================================================
-    // 📐 F = k * (r̂) / (|r|² + ε²)
-    //   k > 0 → Atracción (partículas van al atractor)
-    //   k < 0 → Repulsión (partículas huyen del atractor)
-    //   ε (softening) evita singularidad cuando r → 0
-    // ==========================================================
-
-    /** 0 = desactivado, 1 = activado */
-    radialEnabled: uniform(1.0),
-
-    /** Posición del atractor (controlada por el mouse) */
-    attractor: uniform(new THREE.Vector3(0.0, 0.0, 0.0)),
-
-    /** Intensidad de la fuerza radial (k). Positivo = atrae, negativo = repele */
-    radialStrength: uniform(2.2),
-
-    /** Suavizado (ε). Evita explosiones cuando distancia → 0 */
-    softening: uniform(0.35),
+    waveEnabled: uniform(1.0),
+    waveAmplitude: uniform(2.5),      // A - intensidad
+    waveFrequency: uniform(1.8),      // ω - velocidad de oscilación
+    waveNumber: uniform(0.6),         // k - densidad de ondas
+    waveCenter: uniform(new THREE.Vector3(0, 0, 0)),
+    waveDecay: uniform(0.3),          // Atenuación con distancia
 
     // ==========================================================
-    // FUERZA 3: VÓRTICE (Rotación alrededor del atractor)
+    // FUERZA DE "RESPIRACIÓN" (pulso global)
     // ==========================================================
-    // 📐 F = s * (ẑ × r̂)
-    //   Genera una componente tangencial alrededor del eje Z.
-    //   Crea un efecto de "remolino" o "galaxia".
+    // 📐 F_respiración = B * sin(ωᵣ*t) * r̂_global
+    //   Todas las partículas respiran al unísono
     // ==========================================================
-
-    /** 0 = desactivado, 1 = activado */
-    vortexEnabled: uniform(1.0),
-
-    /** Intensidad del vórtice (s) */
-    vortexStrength: uniform(1.4),
+    breatheEnabled: uniform(1.0),
+    breatheAmplitude: uniform(0.8),
+    breatheFrequency: uniform(0.5),   // Lento, como respiración
 
     // ==========================================================
-    // FUERZA 4: DRAG (Rozamiento / Amortiguamiento)
+    // FUERZA DE "REBOTE" (restitución elástica)
     // ==========================================================
-    // 📐 F = -c * v
-    //   Disipa energía progresivamente.
-    //   Evita que el sistema se vuelva inestable.
+    // 📐 F_rebote = -k_elástica * (posición - centro)
+    //   Las partículas tienden a volver al centro
     // ==========================================================
+    springEnabled: uniform(1.0),
+    springStiffness: uniform(0.15),
 
-    /** 0 = desactivado, 1 = activado */
+    // ==========================================================
+    // ROZAMIENTO
+    // ==========================================================
     dragEnabled: uniform(1.0),
+    dragCoefficient: uniform(0.08),
 
-    /** Coeficiente de rozamiento (c). Mayor valor = más frenado */
-    dragCoefficient: uniform(0.12)
+    // ==========================================================
+    // RUIDO (caos controlado)
+    // ==========================================================
+    noiseEnabled: uniform(1.0),
+    noiseStrength: uniform(0.4),
+
+    // ==========================================================
+    // CONTROLES DEL INTÉRPRETE (modo PERFORMANCE)
+    // ==========================================================
+    intensity: uniform(1.0),          // Control principal (scroll)
+    pulsePhase: uniform(0.0),         // Fase de la respiración
   };
 }
