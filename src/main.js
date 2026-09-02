@@ -1,7 +1,3 @@
-// ============================================================
-// MAIN - INSTRUMENTO DE OLEAJE
-// ============================================================
-
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import WebGPU from 'three/addons/capabilities/WebGPU.js';
@@ -22,13 +18,13 @@ async function main() {
   }
 
   // ============================================================
-  // 1. ESCENA
+  // 1. ESCENA + CÁMARA + RENDERIZADOR
   // ============================================================
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color('#0a0a12');
+  scene.background = new THREE.Color('#050607');
 
   const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 100);
-  camera.position.set(0, 0, 14);
+  camera.position.set(0, 0, 11);
 
   const renderer = new THREE.WebGPURenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -41,34 +37,29 @@ async function main() {
   orbit.target.set(0, 0, 0);
 
   // ============================================================
-  // 2. SIMULACIÓN
+  // 2. PARÁMETROS + SIMULACIÓN
   // ============================================================
   const params = createParameters();
-  const simulation = createSimulation({
-    renderer,
-    scene,
-    params,
-    count: PARTICLE_COUNT
-  });
+  const simulation = createSimulation({ renderer, scene, params, count: PARTICLE_COUNT });
 
   // ============================================================
   // 3. HERRAMIENTAS LAB
   // ============================================================
-  const centerHelper = new THREE.Mesh(
-    new THREE.SphereGeometry(0.1, 12, 8),
-    new THREE.MeshBasicMaterial({ color: '#00d4ff', transparent: true, opacity: 0.5 })
+  const attractorHelper = new THREE.Mesh(
+    new THREE.SphereGeometry(0.12, 16, 12),
+    new THREE.MeshBasicMaterial({ color: '#ffffff' })
   );
-  scene.add(centerHelper);
+  scene.add(attractorHelper);
 
   const axes = new THREE.AxesHelper(1.5);
   scene.add(axes);
 
   // ============================================================
-  // 4. INTERACCIÓN
+  // 4. INTERACCIÓN MOUSE
   // ============================================================
   const pointerNdc = new THREE.Vector2();
   const raycaster = new THREE.Raycaster();
-  const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+  const interactionPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
   const hit = new THREE.Vector3();
 
   addEventListener('pointermove', (event) => {
@@ -76,28 +67,87 @@ async function main() {
     pointerNdc.y = -(event.clientY / innerHeight) * 2 + 1;
 
     raycaster.setFromCamera(pointerNdc, camera);
-    if (raycaster.ray.intersectPlane(plane, hit)) {
-      params.waveCenter.value.copy(hit);
-      centerHelper.position.copy(hit);
+    if (raycaster.ray.intersectPlane(interactionPlane, hit)) {
+      params.attractor.value.copy(hit);
+      attractorHelper.position.copy(hit);
     }
   });
 
-  let pulseTimer = 0;
-  addEventListener('pointerdown', () => {
-    pulseTimer = 1.0;
+  // ============================================================
+  // 5. ESTADO
+  // ============================================================
+  let paused = false;
+  let mode = 'LAB';
+  let panel;
+  let savedRadialStrength = params.radialStrength.value;
+  let savedRadialEnabled = params.radialEnabled.value;
+
+  // ============================================================
+  // 6. PRESETS
+  // ============================================================
+  const applyPreset = (id) => {
+    params.windEnabled.value = 0;
+    params.radialEnabled.value = 0;
+    params.vortexEnabled.value = 0;
+    params.dragEnabled.value = 0;
+    params.wind.value.set(0, 0, 0);
+    params.initialSpeed.value = 0;
+
+    switch(id) {
+      case 'inertia':
+        params.initialSpeed.value = 0.8;
+        break;
+      case 'wind':
+        params.windEnabled.value = 1;
+        params.wind.value.set(1.5, 0, 0);
+        break;
+      case 'attract':
+        params.radialEnabled.value = 1;
+        params.radialStrength.value = 3.0;
+        break;
+      case 'repel':
+        params.radialEnabled.value = 1;
+        params.radialStrength.value = -3.0;
+        break;
+      case 'vortex':
+        params.radialEnabled.value = 1;
+        params.radialStrength.value = 1.0;
+        params.vortexEnabled.value = 1;
+        params.vortexStrength.value = 3.0;
+        params.dragEnabled.value = 1;
+        params.dragCoefficient.value = 0.08;
+        break;
+    }
+    simulation.reset();
+    if (panel?.refresh) panel.refresh();
+  };
+
+  // ============================================================
+  // 7. MODO LAB / PERFORMANCE
+  // ============================================================
+  const setMode = (next) => {
+    mode = next;
+    const lab = mode === 'LAB';
+    if (panel?.setVisible) panel.setVisible(lab);
+    axes.visible = lab;
+    attractorHelper.visible = lab;
+
+    hud.innerHTML = lab
+      ? '🧪 LAB · P: Performance · R: Reset · 1-5: Presets'
+      : '🎵 PERFORMANCE · P: Lab · SPACE: Invertir radial · Mouse: Atractor';
+  };
+
+  // ============================================================
+  // 8. PANEL + HUD
+  // ============================================================
+  panel = createLabPanel({
+    params,
+    onReset: () => simulation.reset(),
+    onPreset: applyPreset,
+    onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB'),
+    onPauseChange: () => { paused = !paused; }
   });
 
-  addEventListener('wheel', (event) => {
-    event.preventDefault();
-    let newIntensity = params.intensity.value + event.deltaY * 0.002;
-    newIntensity = Math.max(0.1, Math.min(3.0, newIntensity));
-    params.intensity.value = newIntensity;
-    updateIntensityDisplay();
-  }, { passive: false });
-
-  // ============================================================
-  // 5. UI
-  // ============================================================
   const hud = document.createElement('div');
   hud.className = 'hud';
   hud.style.cssText = `
@@ -105,125 +155,21 @@ async function main() {
     bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
-    color: rgba(255,255,255,0.7);
+    color: rgba(255,255,255,0.8);
     font-family: monospace;
     font-size: 13px;
     text-align: center;
     pointer-events: none;
-    text-shadow: 0 0 20px rgba(0,0,0,0.8);
+    text-shadow: 0 0 20px rgba(0,0,0,0.9);
     z-index: 10;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.3px;
+    background: rgba(0,0,0,0.4);
+    padding: 8px 20px;
+    border-radius: 20px;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.05);
   `;
   document.body.append(hud);
-
-  const intensityDisplay = document.createElement('div');
-  intensityDisplay.style.cssText = `
-    position: fixed;
-    bottom: 70px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: rgba(255,255,255,0.9);
-    font-family: monospace;
-    font-size: 18px;
-    pointer-events: none;
-    z-index: 10;
-    text-shadow: 0 0 30px rgba(0,212,255,0.3);
-  `;
-  document.body.append(intensityDisplay);
-
-  function updateIntensityDisplay() {
-    intensityDisplay.textContent = `◈ ${params.intensity.value.toFixed(2)}`;
-  }
-  updateIntensityDisplay();
-
-  // ============================================================
-  // 6. ESTADO
-  // ============================================================
-  let paused = false;
-  let mode = 'LAB';
-  let panel;
-
-  // ============================================================
-  // 7. PRESETS (corregidos para usar .value correctamente)
-  // ============================================================
-  const applyPreset = (id) => {
-    // Resetear todos los parámetros a valores por defecto
-    params.waveEnabled.value = 1;
-    params.breatheEnabled.value = 1;
-    params.springEnabled.value = 1;
-    params.dragEnabled.value = 1;
-    params.noiseEnabled.value = 1;
-    params.intensity.value = 1.0;
-
-    // Aplicar preset específico
-    switch(id) {
-      case 'quiet':
-        params.waveAmplitude.value = 0.5;
-        params.breatheAmplitude.value = 0.3;
-        params.springStiffness.value = 0.3;
-        params.dragCoefficient.value = 0.15;
-        params.noiseStrength.value = 0.2;
-        break;
-      case 'storm':
-        params.waveAmplitude.value = 4.0;
-        params.breatheAmplitude.value = 1.5;
-        params.springStiffness.value = 0.05;
-        params.dragCoefficient.value = 0.03;
-        params.noiseStrength.value = 1.0;
-        break;
-      case 'pulse':
-        params.waveAmplitude.value = 2.0;
-        params.breatheAmplitude.value = 0.0;
-        params.springStiffness.value = 0.2;
-        params.dragCoefficient.value = 0.1;
-        params.noiseStrength.value = 0.3;
-        break;
-      case 'chaos':
-        params.waveAmplitude.value = 3.0;
-        params.breatheAmplitude.value = 1.0;
-        params.springStiffness.value = 0.0;
-        params.dragCoefficient.value = 0.02;
-        params.noiseStrength.value = 1.5;
-        break;
-      case 'orbit':
-        params.waveAmplitude.value = 1.0;
-        params.breatheAmplitude.value = 0.0;
-        params.springStiffness.value = 0.4;
-        params.dragCoefficient.value = 0.05;
-        params.noiseStrength.value = 0.1;
-        break;
-      default:
-        break;
-    }
-
-    simulation.reset();
-    if (panel?.refresh) panel.refresh();
-    updateIntensityDisplay();
-  };
-
-  // ============================================================
-  // 8. MODO
-  // ============================================================
-  const setMode = (next) => {
-    mode = next;
-    const lab = mode === 'LAB';
-    if (panel?.setVisible) panel.setVisible(lab);
-    axes.visible = lab;
-    centerHelper.visible = lab;
-
-    hud.innerHTML = lab
-      ? '🧪 LAB · P: Performance · R: Reset · 1: Quiet · 2: Storm · 3: Pulse · 4: Chaos · 5: Orbit'
-      : '🎵 PERFORMANCE · P: Lab · Click: Onda · Scroll: Intensidad';
-  };
-
-  panel = createLabPanel({
-    params,
-    onReset: () => simulation.reset(),
-    onPreset: applyPreset,
-    onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB'),
-    onPauseChange: () => paused = !paused
-  });
-
   setMode('LAB');
 
   // ============================================================
@@ -238,22 +184,30 @@ async function main() {
     if (event.code === 'KeyR') {
       simulation.reset();
       hud.style.color = '#ffb35a';
-      setTimeout(() => hud.style.color = '', 300);
+      setTimeout(() => { hud.style.color = ''; }, 300);
     }
 
-    if (event.code === 'Digit1') applyPreset('quiet');
-    if (event.code === 'Digit2') applyPreset('storm');
-    if (event.code === 'Digit3') applyPreset('pulse');
-    if (event.code === 'Digit4') applyPreset('chaos');
-    if (event.code === 'Digit5') applyPreset('orbit');
+    if (event.code === 'Digit1') applyPreset('inertia');
+    if (event.code === 'Digit2') applyPreset('wind');
+    if (event.code === 'Digit3') applyPreset('attract');
+    if (event.code === 'Digit4') applyPreset('repel');
+    if (event.code === 'Digit5') applyPreset('vortex');
 
     if (event.code === 'Space') {
       event.preventDefault();
-      pulseTimer = 0.8;
-      let newIntensity = params.intensity.value + 0.5;
-      newIntensity = Math.min(3.0, newIntensity);
-      params.intensity.value = newIntensity;
-      updateIntensityDisplay();
+      savedRadialStrength = params.radialStrength.value;
+      savedRadialEnabled = params.radialEnabled.value;
+      params.radialEnabled.value = 1;
+      params.radialStrength.value = -(savedRadialStrength || 2.0);
+      hud.style.color = '#ff6b6b';
+    }
+  });
+
+  addEventListener('keyup', (event) => {
+    if (event.code === 'Space') {
+      params.radialEnabled.value = savedRadialEnabled;
+      params.radialStrength.value = savedRadialStrength;
+      hud.style.color = '';
     }
   });
 
@@ -272,29 +226,16 @@ async function main() {
   simulation.reset();
 
   renderer.setAnimationLoop(() => {
-    // Pulso del click
-    if (pulseTimer > 0.01) {
-      const pulseIntensity = pulseTimer * 2.0;
-      params.waveAmplitude.value = 2.5 + pulseIntensity;
-      pulseTimer *= 0.97;
-    } else if (pulseTimer > 0) {
-      pulseTimer = 0;
-      params.waveAmplitude.value = 2.5;
-    }
-
     if (!paused) simulation.stepSimulation();
     orbit.update();
     renderer.render(scene, camera);
   });
 }
 
-// ============================================================
-// 12. EJECUTAR
-// ============================================================
 main().catch((error) => {
   console.error(error);
   const pre = document.createElement('pre');
-  pre.style.cssText = 'position:fixed;inset:16px;white-space:pre-wrap;color:#fff;z-index:50;background:#1a1a2e;padding:20px;border-radius:8px;overflow:auto;';
+  pre.style.cssText = 'position:fixed;inset:16px;white-space:pre-wrap;color:#fff;z-index:50;background:#1a1a2e;padding:20px;border-radius:8px;overflow:auto;max-height:80vh;';
   pre.textContent = String(error?.stack || error);
   document.body.append(pre);
 });
