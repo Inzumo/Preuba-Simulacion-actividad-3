@@ -70,9 +70,7 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
     <p>LAB: aísla fuerzas, predice y prueba. <strong>P</strong> → PERFORMANCE</p>
   `;
 
-  // ============================================================
-  // SIMULACIÓN
-  // ============================================================
+  // Simulación
   const sim = document.createElement('div');
   sim.className = 'group';
   sim.innerHTML = '<h2>⚙️ Simulación</h2>';
@@ -82,9 +80,7 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
   refreshers.push(rangeRow(sim, 'Vel. máxima', params.maxSpeed, 0.2, 12, 0.1));
   refreshers.push(rangeRow(sim, 'Tamaño partícula', params.particleSize, 0.005, 0.1, 0.001));
 
-  // ============================================================
-  // FUERZAS
-  // ============================================================
+  // Fuerzas
   const force = document.createElement('div');
   force.className = 'group';
   force.innerHTML = '<h2>🌀 Fuerzas</h2>';
@@ -103,9 +99,7 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
   refreshers.push(rangeRow(force, 'Viento X', params.windX, -4, 4, 0.05));
   refreshers.push(rangeRow(force, 'Viento Y', params.windY, -4, 4, 0.05));
 
-  // ============================================================
-  // PRUEBAS
-  // ============================================================
+  // Pruebas
   const tests = document.createElement('div');
   tests.className = 'group';
   tests.innerHTML = '<h2>🧪 Pruebas</h2>';
@@ -122,9 +116,7 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
     button(tests, label, () => onPreset(id));
   }
 
-  // ============================================================
-  // ACCIONES
-  // ============================================================
+  // Acciones
   const actions = document.createElement('div');
   actions.className = 'group';
   actions.innerHTML = '<h2>🎮 Acciones</h2>';
