@@ -68,36 +68,56 @@ async function main() {
   let savedRadialStrength = params.radialStrength.value;
   let savedRadialEnabled = params.radialEnabled.value;
 
+  // ============================================================
+  // PRESETS - AHORA SIN RESET!
+  // Solo cambian parámetros, las partículas siguen su curso
+  // ============================================================
   const applyPreset = (id) => {
+    // No reset! Solo cambiamos parámetros
+    
+    // Desactivar todo primero
     params.windEnabled.value = 0;
     params.radialEnabled.value = 0;
     params.vortexEnabled.value = 0;
-    params.dragEnabled.value = 0;
+    params.dragEnabled.value = 1; // Siempre activo para estabilidad
+    params.dragCoefficient.value = 0.08;
     params.windX.value = 0;
     params.windY.value = 0;
-    params.initialSpeed.value = 0;
 
+    // Aplicar preset específico (sin reset)
     if (id === 'inertia') {
-      params.initialSpeed.value = 0.8;
+      // Inercia: sin fuerzas, solo movimiento existente
+      params.dragCoefficient.value = 0.02; // Muy poco drag para que conserve velocidad
+      
     } else if (id === 'wind') {
       params.windEnabled.value = 1;
-      params.windX.value = 1.5;
+      params.windX.value = 2.0;
+      params.windY.value = 0.5;
+      
     } else if (id === 'attract') {
       params.radialEnabled.value = 1;
-      params.radialStrength.value = 3.0;
+      params.radialStrength.value = 3.5;
+      params.dragCoefficient.value = 0.05;
+      
     } else if (id === 'repel') {
       params.radialEnabled.value = 1;
-      params.radialStrength.value = -3.0;
+      params.radialStrength.value = -4.0;
+      params.dragCoefficient.value = 0.05;
+      
     } else if (id === 'vortex') {
       params.radialEnabled.value = 1;
-      params.radialStrength.value = 1.0;
+      params.radialStrength.value = 1.5;
       params.vortexEnabled.value = 1;
-      params.vortexStrength.value = 3.0;
-      params.dragEnabled.value = 1;
-      params.dragCoefficient.value = 0.08;
+      params.vortexStrength.value = 4.0;
+      params.dragCoefficient.value = 0.04;
     }
-    simulation.reset();
+
+    // Actualizar panel si existe
     if (panel) panel.refresh();
+    
+    // Feedback visual
+    hud.style.color = '#00d4ff';
+    setTimeout(() => { hud.style.color = ''; }, 200);
   };
 
   const setMode = (next) => {
@@ -108,13 +128,17 @@ async function main() {
     attractorHelper.visible = lab;
 
     hud.innerHTML = lab
-      ? '🧪 LAB · P: Performance · R: Reset · 1-5: Presets'
+      ? '🧪 LAB · P: Performance · R: Reset · 1-5: Presets (sin reinicio)'
       : '🎵 PERFORMANCE · P: Lab · SPACE: Invertir radial · Mouse: Atractor';
   };
 
   panel = createLabPanel({
     params,
-    onReset: () => simulation.reset(),
+    onReset: () => {
+      simulation.reset(); // Reset manual con R
+      hud.style.color = '#ffb35a';
+      setTimeout(() => { hud.style.color = ''; }, 300);
+    },
     onPreset: applyPreset,
     onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB'),
     onPauseChange: () => { paused = !paused; }
@@ -139,11 +163,14 @@ async function main() {
     border-radius: 20px;
     backdrop-filter: blur(8px);
     border: 1px solid rgba(255,255,255,0.05);
+    transition: color 0.2s;
   `;
   document.body.append(hud);
   setMode('LAB');
 
-  // Teclado
+  // ============================================================
+  // TECLADO
+  // ============================================================
   addEventListener('keydown', (event) => {
     if (event.repeat) return;
 
@@ -156,6 +183,7 @@ async function main() {
       setTimeout(() => { hud.style.color = ''; }, 300);
     }
 
+    // Presets - AHORA SIN RESET
     if (event.code === 'Digit1') applyPreset('inertia');
     if (event.code === 'Digit2') applyPreset('wind');
     if (event.code === 'Digit3') applyPreset('attract');
@@ -167,7 +195,7 @@ async function main() {
       savedRadialStrength = params.radialStrength.value;
       savedRadialEnabled = params.radialEnabled.value;
       params.radialEnabled.value = 1;
-      params.radialStrength.value = -(savedRadialStrength || 2.0);
+      params.radialStrength.value = -(Math.abs(savedRadialStrength) || 3.0);
       hud.style.color = '#ff6b6b';
     }
   });
@@ -186,6 +214,9 @@ async function main() {
     renderer.setSize(innerWidth, innerHeight);
   });
 
+  // ============================================================
+  // INICIALIZAR
+  // ============================================================
   simulation.reset();
 
   renderer.setAnimationLoop(() => {
