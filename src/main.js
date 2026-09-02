@@ -45,7 +45,6 @@ async function main() {
   const axes = new THREE.AxesHelper(1.5);
   scene.add(axes);
 
-  // Mouse
   const pointerNdc = new THREE.Vector2();
   const raycaster = new THREE.Raycaster();
   const interactionPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -69,50 +68,37 @@ async function main() {
   let savedRadialEnabled = params.radialEnabled.value;
 
   // ============================================================
-  // PRESETS - AHORA SIN RESET!
-  // Solo cambian parámetros, las partículas siguen su curso
+  // PRESETS - SIN RESET
   // ============================================================
   const applyPreset = (id) => {
-    // No reset! Solo cambiamos parámetros
-    
-    // Desactivar todo primero
+    // Desactivar todo
     params.windEnabled.value = 0;
     params.radialEnabled.value = 0;
     params.vortexEnabled.value = 0;
-    params.dragEnabled.value = 1; // Siempre activo para estabilidad
+    params.dragEnabled.value = 1;
     params.dragCoefficient.value = 0.08;
     params.windX.value = 0;
     params.windY.value = 0;
+    params.initialSpeed.value = 0.35;
 
-    // Aplicar preset específico (sin reset)
     if (id === 'inertia') {
-      // Inercia: sin fuerzas, solo movimiento existente
-      params.dragCoefficient.value = 0.02; // Muy poco drag para que conserve velocidad
-      
+      params.dragCoefficient.value = 0.02;
     } else if (id === 'wind') {
       params.windEnabled.value = 1;
       params.windX.value = 2.0;
-      params.windY.value = 0.5;
-      
     } else if (id === 'attract') {
       params.radialEnabled.value = 1;
       params.radialStrength.value = 3.5;
-      params.dragCoefficient.value = 0.05;
-      
     } else if (id === 'repel') {
       params.radialEnabled.value = 1;
       params.radialStrength.value = -4.0;
-      params.dragCoefficient.value = 0.05;
-      
     } else if (id === 'vortex') {
       params.radialEnabled.value = 1;
       params.radialStrength.value = 1.5;
       params.vortexEnabled.value = 1;
       params.vortexStrength.value = 4.0;
-      params.dragCoefficient.value = 0.04;
     }
 
-    // Actualizar panel si existe
     if (panel) panel.refresh();
     
     // Feedback visual
@@ -128,14 +114,14 @@ async function main() {
     attractorHelper.visible = lab;
 
     hud.innerHTML = lab
-      ? '🧪 LAB · P: Performance · R: Reset · 1-5: Presets (sin reinicio)'
+      ? '🧪 LAB · P: Performance · R: Reset · 1-5: Presets'
       : '🎵 PERFORMANCE · P: Lab · SPACE: Invertir radial · Mouse: Atractor';
   };
 
   panel = createLabPanel({
     params,
     onReset: () => {
-      simulation.reset(); // Reset manual con R
+      simulation.reset();
       hud.style.color = '#ffb35a';
       setTimeout(() => { hud.style.color = ''; }, 300);
     },
@@ -183,7 +169,6 @@ async function main() {
       setTimeout(() => { hud.style.color = ''; }, 300);
     }
 
-    // Presets - AHORA SIN RESET
     if (event.code === 'Digit1') applyPreset('inertia');
     if (event.code === 'Digit2') applyPreset('wind');
     if (event.code === 'Digit3') applyPreset('attract');
@@ -214,9 +199,6 @@ async function main() {
     renderer.setSize(innerWidth, innerHeight);
   });
 
-  // ============================================================
-  // INICIALIZAR
-  // ============================================================
   simulation.reset();
 
   renderer.setAnimationLoop(() => {
