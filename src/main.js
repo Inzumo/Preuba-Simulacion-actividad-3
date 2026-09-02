@@ -17,9 +17,6 @@ async function main() {
     throw new Error('WebGPU no disponible');
   }
 
-  // ============================================================
-  // 1. ESCENA + CÁMARA + RENDERIZADOR
-  // ============================================================
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#050607');
 
@@ -36,15 +33,9 @@ async function main() {
   orbit.enableDamping = true;
   orbit.target.set(0, 0, 0);
 
-  // ============================================================
-  // 2. PARÁMETROS + SIMULACIÓN
-  // ============================================================
   const params = createParameters();
   const simulation = createSimulation({ renderer, scene, params, count: PARTICLE_COUNT });
 
-  // ============================================================
-  // 3. HERRAMIENTAS LAB
-  // ============================================================
   const attractorHelper = new THREE.Mesh(
     new THREE.SphereGeometry(0.12, 16, 12),
     new THREE.MeshBasicMaterial({ color: '#ffffff' })
@@ -54,9 +45,7 @@ async function main() {
   const axes = new THREE.AxesHelper(1.5);
   scene.add(axes);
 
-  // ============================================================
-  // 4. INTERACCIÓN MOUSE
-  // ============================================================
+  // Mouse
   const pointerNdc = new THREE.Vector2();
   const raycaster = new THREE.Raycaster();
   const interactionPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -73,62 +62,48 @@ async function main() {
     }
   });
 
-  // ============================================================
-  // 5. ESTADO
-  // ============================================================
   let paused = false;
   let mode = 'LAB';
   let panel;
   let savedRadialStrength = params.radialStrength.value;
   let savedRadialEnabled = params.radialEnabled.value;
 
-  // ============================================================
-  // 6. PRESETS
-  // ============================================================
   const applyPreset = (id) => {
     params.windEnabled.value = 0;
     params.radialEnabled.value = 0;
     params.vortexEnabled.value = 0;
     params.dragEnabled.value = 0;
-    params.wind.value.set(0, 0, 0);
+    params.windX.value = 0;
+    params.windY.value = 0;
     params.initialSpeed.value = 0;
 
-    switch(id) {
-      case 'inertia':
-        params.initialSpeed.value = 0.8;
-        break;
-      case 'wind':
-        params.windEnabled.value = 1;
-        params.wind.value.set(1.5, 0, 0);
-        break;
-      case 'attract':
-        params.radialEnabled.value = 1;
-        params.radialStrength.value = 3.0;
-        break;
-      case 'repel':
-        params.radialEnabled.value = 1;
-        params.radialStrength.value = -3.0;
-        break;
-      case 'vortex':
-        params.radialEnabled.value = 1;
-        params.radialStrength.value = 1.0;
-        params.vortexEnabled.value = 1;
-        params.vortexStrength.value = 3.0;
-        params.dragEnabled.value = 1;
-        params.dragCoefficient.value = 0.08;
-        break;
+    if (id === 'inertia') {
+      params.initialSpeed.value = 0.8;
+    } else if (id === 'wind') {
+      params.windEnabled.value = 1;
+      params.windX.value = 1.5;
+    } else if (id === 'attract') {
+      params.radialEnabled.value = 1;
+      params.radialStrength.value = 3.0;
+    } else if (id === 'repel') {
+      params.radialEnabled.value = 1;
+      params.radialStrength.value = -3.0;
+    } else if (id === 'vortex') {
+      params.radialEnabled.value = 1;
+      params.radialStrength.value = 1.0;
+      params.vortexEnabled.value = 1;
+      params.vortexStrength.value = 3.0;
+      params.dragEnabled.value = 1;
+      params.dragCoefficient.value = 0.08;
     }
     simulation.reset();
-    if (panel?.refresh) panel.refresh();
+    if (panel) panel.refresh();
   };
 
-  // ============================================================
-  // 7. MODO LAB / PERFORMANCE
-  // ============================================================
   const setMode = (next) => {
     mode = next;
     const lab = mode === 'LAB';
-    if (panel?.setVisible) panel.setVisible(lab);
+    if (panel) panel.setVisible(lab);
     axes.visible = lab;
     attractorHelper.visible = lab;
 
@@ -137,9 +112,6 @@ async function main() {
       : '🎵 PERFORMANCE · P: Lab · SPACE: Invertir radial · Mouse: Atractor';
   };
 
-  // ============================================================
-  // 8. PANEL + HUD
-  // ============================================================
   panel = createLabPanel({
     params,
     onReset: () => simulation.reset(),
@@ -162,7 +134,6 @@ async function main() {
     pointer-events: none;
     text-shadow: 0 0 20px rgba(0,0,0,0.9);
     z-index: 10;
-    letter-spacing: 0.3px;
     background: rgba(0,0,0,0.4);
     padding: 8px 20px;
     border-radius: 20px;
@@ -172,9 +143,7 @@ async function main() {
   document.body.append(hud);
   setMode('LAB');
 
-  // ============================================================
-  // 9. TECLADO
-  // ============================================================
+  // Teclado
   addEventListener('keydown', (event) => {
     if (event.repeat) return;
 
@@ -211,18 +180,12 @@ async function main() {
     }
   });
 
-  // ============================================================
-  // 10. RESIZE
-  // ============================================================
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
 
-  // ============================================================
-  // 11. LOOP
-  // ============================================================
   simulation.reset();
 
   renderer.setAnimationLoop(() => {
