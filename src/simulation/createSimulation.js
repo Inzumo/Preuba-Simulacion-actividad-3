@@ -1,10 +1,6 @@
 // ============================================================
 // SIMULACIÓN DE OLEAJE - GPU COMPUTE
 // ============================================================
-// Enfoque completamente nuevo:
-//   Las partículas se comportan como un campo de ondas
-//   que respira, se expande y colapsa rítmicamente.
-// ============================================================
 
 import * as THREE from 'three/webgpu';
 import {
@@ -15,7 +11,6 @@ import {
   instanceIndex,
   instancedArray,
   max,
-  min,
   mix,
   mod,
   sin,
@@ -25,7 +20,11 @@ import {
   uv,
   vec3,
   vec4,
-  time
+  time,
+  div,
+  mul,
+  sub,
+  add
 } from 'three/tsl';
 
 export function createSimulation({ renderer, scene, params, count = 131072 }) {
@@ -34,28 +33,22 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
   // ============================================================
   const positionBuffer = instancedArray(count, 'vec3');
   const velocityBuffer = instancedArray(count, 'vec3');
-  const phaseBuffer = instancedArray(count, 'float'); // Fase individual de cada partícula
+  const phaseBuffer = instancedArray(count, 'float');
 
   // ============================================================
-  // 2. INICIALIZACIÓN - Distribución en anillo
+  // 2. INICIALIZACIÓN
   // ============================================================
-  // Las partículas empiezan en una configuración de "nube"
-  // con diferentes radios y fases.
-  // ============================================================
-
   const initParticles = Fn(() => {
     const i = instanceIndex;
     const p = positionBuffer.element(i);
     const v = velocityBuffer.element(i);
     const phase = phaseBuffer.element(i);
 
-    // Semillas para hash
     const r1 = hash(i.add(uint(11)));
     const r2 = hash(i.add(uint(23)));
     const r3 = hash(i.add(uint(37)));
     const r4 = hash(i.add(uint(53)));
 
-    // Posición: distribución en una "galaxia" inicial
     const radius = r1.mul(3.0).add(0.5);
     const theta = r2.mul(6.2832);
     const z = r3.mul(2.0).sub(1.0);
@@ -66,21 +59,18 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
       z
     ));
 
-    // Velocidad inicial: tangencial + pequeña radial
     v.assign(vec3(
-      -radius.mul(sin(theta)).mul(0.3),
+      radius.mul(sin(theta)).mul(-0.3),
       radius.mul(cos(theta)).mul(0.3),
       r4.sub(0.5).mul(0.2)
     ));
 
-    // Fase individual (para respiración asíncrona)
     phase.assign(r3.mul(6.2832));
   })().compute(count).setName('Initialize Particles');
 
   // ============================================================
-  // 3. UPDATE - Fuerzas de oleaje
+  // 3. UPDATE
   // ============================================================
-
   const updateParticles = Fn(() => {
     const i = instanceIndex;
     const p = positionBuffer.element(i);
@@ -93,22 +83,16 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     // ============================================================
     // FUERZA 1: ONDA DE PRESIÓN
     // ============================================================
-    // 📐 F = A * sin(ω*t - k*r + φ) * e^(-α*r) * r̂
-    //   Donde r = distancia al centro de la onda
-    // ============================================================
-
     const toCenter = p.sub(params.waveCenter);
     const distance = max(toCenter.length(), 0.1);
     const direction = toCenter.div(distance);
 
-    // Onda viajera: seno que se mueve hacia afuera
     const wave = sin(
       params.waveFrequency.mul(time).sub(
         params.waveNumber.mul(distance)
       ).add(phase)
     );
 
-    // Atenuación con la distancia
     const decay = max(
       float(1.0).sub(
         params.waveDecay.mul(distance).div(6.0)
@@ -128,10 +112,6 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     // ============================================================
     // FUERZA 2: RESPIRACIÓN GLOBAL
     // ============================================================
-    // 📐 F = B * sin(ωᵣ*t + φᵢ) * r̂_global
-    //   Todas las partículas respiran, cada una con su fase
-    // ============================================================
-
     const globalPhase = time.mul(params.breatheFrequency).add(phase);
     const breathe = sin(globalPhase);
     const breatheForce = p
@@ -144,12 +124,8 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     force.addAssign(breatheForce);
 
     // ============================================================
-    // FUERZA 3: RESORTE (centro)
+    // FUERZA 3: RESORTE
     // ============================================================
-    // 📐 F = -k * p
-    //   Las partículas tienden a volver al origen
-    // ============================================================
-
     const springForce = p
       .mul(-1.0)
       .mul(params.springStiffness)
@@ -158,16 +134,13 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     force.addAssign(springForce);
 
     // ============================================================
-    // FUERZA 4: ROZAMIENTO
+    // FUERZA 4: DRAG
     // ============================================================
     force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
 
     // ============================================================
-    // FUERZA 5: RUIDO (micro-movimiento)
+    // FUERZA 5: RUIDO
     // ============================================================
-    // Pequeñas perturbaciones aleatorias para evitar cristalización
-    // ============================================================
-
     const noiseX = hash(i.add(uint(time.mul(100).toInt())));
     const noiseY = hash(i.add(uint(time.mul(137).toInt())));
     const noiseZ = hash(i.add(uint(time.mul(191).toInt())));
@@ -184,7 +157,6 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     // ============================================================
     // 4. INTEGRACIÓN
     // ============================================================
-
     v.addAssign(force.mul(dt));
 
     const speed = v.length();
@@ -195,14 +167,10 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     p.addAssign(v.mul(dt));
 
     // ============================================================
-    // 5. CONDICIONES DE BORDE - Elásticas
+    // 5. BORDES ELÁSTICOS
     // ============================================================
-    // Las partículas rebotan suavemente en los bordes
-    // ============================================================
-
     const half = params.boundsSize.mul(0.5);
 
-    // X
     If(p.x.greaterThan(half), () => {
       p.x.assign(half);
       v.x.assign(v.x.mul(-0.5));
@@ -212,7 +180,6 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
       v.x.assign(v.x.mul(-0.5));
     });
 
-    // Y
     If(p.y.greaterThan(half), () => {
       p.y.assign(half);
       v.y.assign(v.y.mul(-0.5));
@@ -222,7 +189,6 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
       v.y.assign(v.y.mul(-0.5));
     });
 
-    // Z
     If(p.z.greaterThan(half), () => {
       p.z.assign(half);
       v.z.assign(v.z.mul(-0.5));
@@ -234,56 +200,43 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
   })().compute(count).setName('Update Particles');
 
   // ============================================================
-  // 6. RENDER - Estilo "neón orgánico"
+  // 6. RENDER
   // ============================================================
-  // Las partículas cambian de tamaño según su velocidad
-  // y su fase de respiración.
-  // ============================================================
-
   const material = new THREE.SpriteNodeMaterial({
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     transparent: true,
   });
 
-  // Posición
   material.positionNode = positionBuffer.toAttribute();
 
-  // Tamaño dinámico: respira + velocidad
+  // Tamaño dinámico
   material.scaleNode = Fn(() => {
     const baseSize = params.particleSize;
     const speed = velocityBuffer.toAttribute().length();
     const phase = phaseBuffer.toAttribute();
 
-    // Tamaño oscila con la respiración
     const breatheScale = float(1.0).add(
       sin(time.mul(params.breatheFrequency).add(phase)).mul(0.3)
     );
-
-    // Velocidad también agranda la partícula
     const speedScale = float(1.0).add(speed.div(2.0));
 
     return baseSize.mul(breatheScale).mul(speedScale);
   })();
 
-  // Color: gradiente de "frío a cálido" con toque neón
+  // Color dinámico
   material.colorNode = Fn(() => {
     const speed = velocityBuffer.toAttribute().length();
     const phase = phaseBuffer.toAttribute();
-
-    // Velocidad normalizada
     const t = speed.div(params.maxSpeed).clamp(0.0, 1.0);
 
-    // Fase de respiración para variación de tono
     const breath = sin(time.mul(params.breatheFrequency).add(phase)).mul(0.5).add(0.5);
 
-    // Paleta: Azul profundo → Cian → Rosa → Naranja
-    const c1 = color('#0a0a2e'); // Azul oscuro
-    const c2 = color('#00d4ff'); // Cian neón
-    const c3 = color('#ff6bcd'); // Rosa
-    const c4 = color('#ffb35a'); // Naranja
+    const c1 = color('#0a0a2e');
+    const c2 = color('#00d4ff');
+    const c3 = color('#ff6bcd');
+    const c4 = color('#ffb35a');
 
-    // Mezcla con 3 puntos de control
     let finalColor;
     If(t.lessThan(0.33), () => {
       finalColor = mix(c1, c2, t.div(0.33));
@@ -295,12 +248,11 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
       finalColor = mix(c3, c4, t.sub(0.66).div(0.34));
     });
 
-    // Variación por fase de respiración
-    const breatheShift = breath.mul(0.2);
+    const breatheShift = breath.mul(0.15);
     return vec4(finalColor, 0.9);
   })();
 
-  // Máscara circular con borde suave
+  // Máscara circular
   material.opacityNode = Fn(() => {
     const dist = uv().xy.sub(0.5).length();
     return step(dist, 0.5).mul(float(1.0).sub(dist.mul(0.5)));
@@ -312,9 +264,8 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
   scene.add(mesh);
 
   // ============================================================
-  // 7. API PÚBLICA
+  // 7. API
   // ============================================================
-
   function reset() {
     renderer.compute(initParticles);
   }
