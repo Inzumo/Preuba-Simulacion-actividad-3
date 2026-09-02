@@ -1,10 +1,6 @@
 // ============================================================
 // MAIN - INSTRUMENTO DE OLEAJE
 // ============================================================
-// Enfoque: "Respiración y ondas expansivas"
-// El intérprete controla la intensidad y genera ondas
-// con el mouse.
-// ============================================================
 
 import * as THREE from 'three/webgpu';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -28,7 +24,6 @@ async function main() {
   // ============================================================
   // 1. ESCENA
   // ============================================================
-
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#0a0a12');
 
@@ -48,7 +43,6 @@ async function main() {
   // ============================================================
   // 2. SIMULACIÓN
   // ============================================================
-
   const params = createParameters();
   const simulation = createSimulation({
     renderer,
@@ -60,7 +54,6 @@ async function main() {
   // ============================================================
   // 3. HERRAMIENTAS LAB
   // ============================================================
-
   const centerHelper = new THREE.Mesh(
     new THREE.SphereGeometry(0.1, 12, 8),
     new THREE.MeshBasicMaterial({ color: '#00d4ff', transparent: true, opacity: 0.5 })
@@ -71,15 +64,13 @@ async function main() {
   scene.add(axes);
 
   // ============================================================
-  // 4. INTERACCIÓN - ONDAS CON CLICK
+  // 4. INTERACCIÓN
   // ============================================================
-
   const pointerNdc = new THREE.Vector2();
   const raycaster = new THREE.Raycaster();
   const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
   const hit = new THREE.Vector3();
 
-  // El centro de la onda sigue al mouse
   addEventListener('pointermove', (event) => {
     pointerNdc.x = (event.clientX / innerWidth) * 2 - 1;
     pointerNdc.y = -(event.clientY / innerHeight) * 2 + 1;
@@ -91,23 +82,22 @@ async function main() {
     }
   });
 
-  // Clic → genera una onda fuerte (pulso)
   let pulseTimer = 0;
   addEventListener('pointerdown', () => {
     pulseTimer = 1.0;
   });
 
-  // Scroll → control de intensidad
   addEventListener('wheel', (event) => {
-    const newIntensity = params.intensity.value + event.deltaY * 0.002;
-    params.intensity.value = Math.max(0.1, Math.min(3.0, newIntensity));
+    event.preventDefault();
+    let newIntensity = params.intensity.value + event.deltaY * 0.002;
+    newIntensity = Math.max(0.1, Math.min(3.0, newIntensity));
+    params.intensity.value = newIntensity;
     updateIntensityDisplay();
-  });
+  }, { passive: false });
 
   // ============================================================
-  // 5. UI - Indicadores
+  // 5. UI
   // ============================================================
-
   const hud = document.createElement('div');
   hud.className = 'hud';
   hud.style.cssText = `
@@ -149,16 +139,15 @@ async function main() {
   // ============================================================
   // 6. ESTADO
   // ============================================================
-
   let paused = false;
   let mode = 'LAB';
   let panel;
 
   // ============================================================
-  // 7. PRESETS
+  // 7. PRESETS (corregidos para usar .value correctamente)
   // ============================================================
-
   const applyPreset = (id) => {
+    // Resetear todos los parámetros a valores por defecto
     params.waveEnabled.value = 1;
     params.breatheEnabled.value = 1;
     params.springEnabled.value = 1;
@@ -166,47 +155,59 @@ async function main() {
     params.noiseEnabled.value = 1;
     params.intensity.value = 1.0;
 
-    if (id === 'quiet') {
-      params.waveAmplitude.value = 0.5;
-      params.breatheAmplitude.value = 0.3;
-      params.springStiffness.value = 0.3;
-      params.dragCoefficient.value = 0.15;
-    } else if (id === 'storm') {
-      params.waveAmplitude.value = 4.0;
-      params.breatheAmplitude.value = 1.5;
-      params.springStiffness.value = 0.05;
-      params.dragCoefficient.value = 0.03;
-      params.noiseStrength.value = 1.0;
-    } else if (id === 'pulse') {
-      params.waveAmplitude.value = 2.0;
-      params.breatheAmplitude.value = 0.0;
-      params.springStiffness.value = 0.2;
-      params.dragCoefficient.value = 0.1;
-    } else if (id === 'chaos') {
-      params.waveAmplitude.value = 3.0;
-      params.breatheAmplitude.value = 1.0;
-      params.springStiffness.value = 0.0;
-      params.dragCoefficient.value = 0.02;
-      params.noiseStrength.value = 1.5;
-    } else if (id === 'orbit') {
-      params.waveAmplitude.value = 1.0;
-      params.breatheAmplitude.value = 0.0;
-      params.springStiffness.value = 0.4;
-      params.dragCoefficient.value = 0.05;
+    // Aplicar preset específico
+    switch(id) {
+      case 'quiet':
+        params.waveAmplitude.value = 0.5;
+        params.breatheAmplitude.value = 0.3;
+        params.springStiffness.value = 0.3;
+        params.dragCoefficient.value = 0.15;
+        params.noiseStrength.value = 0.2;
+        break;
+      case 'storm':
+        params.waveAmplitude.value = 4.0;
+        params.breatheAmplitude.value = 1.5;
+        params.springStiffness.value = 0.05;
+        params.dragCoefficient.value = 0.03;
+        params.noiseStrength.value = 1.0;
+        break;
+      case 'pulse':
+        params.waveAmplitude.value = 2.0;
+        params.breatheAmplitude.value = 0.0;
+        params.springStiffness.value = 0.2;
+        params.dragCoefficient.value = 0.1;
+        params.noiseStrength.value = 0.3;
+        break;
+      case 'chaos':
+        params.waveAmplitude.value = 3.0;
+        params.breatheAmplitude.value = 1.0;
+        params.springStiffness.value = 0.0;
+        params.dragCoefficient.value = 0.02;
+        params.noiseStrength.value = 1.5;
+        break;
+      case 'orbit':
+        params.waveAmplitude.value = 1.0;
+        params.breatheAmplitude.value = 0.0;
+        params.springStiffness.value = 0.4;
+        params.dragCoefficient.value = 0.05;
+        params.noiseStrength.value = 0.1;
+        break;
+      default:
+        break;
     }
+
     simulation.reset();
-    panel?.refresh();
+    if (panel?.refresh) panel.refresh();
     updateIntensityDisplay();
   };
 
   // ============================================================
   // 8. MODO
   // ============================================================
-
   const setMode = (next) => {
     mode = next;
     const lab = mode === 'LAB';
-    panel.setVisible(lab);
+    if (panel?.setVisible) panel.setVisible(lab);
     axes.visible = lab;
     centerHelper.visible = lab;
 
@@ -228,11 +229,12 @@ async function main() {
   // ============================================================
   // 9. TECLADO
   // ============================================================
-
   addEventListener('keydown', (event) => {
     if (event.repeat) return;
 
-    if (event.code === 'KeyP') setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB');
+    if (event.code === 'KeyP') {
+      setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB');
+    }
     if (event.code === 'KeyR') {
       simulation.reset();
       hud.style.color = '#ffb35a';
@@ -245,11 +247,12 @@ async function main() {
     if (event.code === 'Digit4') applyPreset('chaos');
     if (event.code === 'Digit5') applyPreset('orbit');
 
-    // Barra espaciadora: pausa momentánea + pulso
     if (event.code === 'Space') {
       event.preventDefault();
       pulseTimer = 0.8;
-      params.intensity.value = Math.min(3.0, params.intensity.value + 0.5);
+      let newIntensity = params.intensity.value + 0.5;
+      newIntensity = Math.min(3.0, newIntensity);
+      params.intensity.value = newIntensity;
       updateIntensityDisplay();
     }
   });
@@ -257,7 +260,6 @@ async function main() {
   // ============================================================
   // 10. RESIZE
   // ============================================================
-
   addEventListener('resize', () => {
     camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
@@ -267,20 +269,17 @@ async function main() {
   // ============================================================
   // 11. LOOP
   // ============================================================
-
   simulation.reset();
 
   renderer.setAnimationLoop(() => {
-    // Pulso de click: intensidad extra que decae
-    if (pulseTimer > 0) {
+    // Pulso del click
+    if (pulseTimer > 0.01) {
       const pulseIntensity = pulseTimer * 2.0;
-      // Añadimos un pulso temporal a la onda
       params.waveAmplitude.value = 2.5 + pulseIntensity;
-      pulseTimer *= 0.98;
-      if (pulseTimer < 0.01) {
-        pulseTimer = 0;
-        params.waveAmplitude.value = 2.5;
-      }
+      pulseTimer *= 0.97;
+    } else if (pulseTimer > 0) {
+      pulseTimer = 0;
+      params.waveAmplitude.value = 2.5;
     }
 
     if (!paused) simulation.stepSimulation();
@@ -289,10 +288,13 @@ async function main() {
   });
 }
 
+// ============================================================
+// 12. EJECUTAR
+// ============================================================
 main().catch((error) => {
   console.error(error);
   const pre = document.createElement('pre');
-  pre.style.cssText = 'position:fixed;inset:16px;white-space:pre-wrap;color:#fff;z-index:50;background:#1a1a2e;padding:20px;border-radius:8px;';
+  pre.style.cssText = 'position:fixed;inset:16px;white-space:pre-wrap;color:#fff;z-index:50;background:#1a1a2e;padding:20px;border-radius:8px;overflow:auto;';
   pre.textContent = String(error?.stack || error);
   document.body.append(pre);
 });
