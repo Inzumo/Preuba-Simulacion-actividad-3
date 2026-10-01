@@ -17,12 +17,9 @@ import {
 } from 'three/tsl';
 
 export function createSimulation({ renderer, scene, params, count = 300000 }) {
-  // STATE -----------------------------------------------------------------
-  // Cada partícula guarda posición y velocidad. Viven en GPU storage.
   const positionBuffer = instancedArray(count, 'vec3');
   const velocityBuffer = instancedArray(count, 'vec3');
 
-  // INITIALIZATION --------------------------------------------------------
   const initParticles = Fn(() => {
     const i = instanceIndex;
     const p = positionBuffer.element(i);
@@ -39,8 +36,6 @@ export function createSimulation({ renderer, scene, params, count = 300000 }) {
     v.assign(vec3(r4, r5, r6).sub(0.5).mul(params.initialSpeed));
   })().compute(count).setName('Initialize Particles');
 
-  // UPDATE / COMPUTE SHADER ----------------------------------------------
-  // estado → fuerzas → aceleración → velocidad → posición
   const updateParticles = Fn(() => {
     const p = positionBuffer.element(instanceIndex);
     const v = velocityBuffer.element(instanceIndex);
@@ -48,39 +43,26 @@ export function createSimulation({ renderer, scene, params, count = 300000 }) {
     const dt = params.dt.mul(params.timeScale);
     const force = vec3(0.0).toVar();
 
-    // 1) VIENTO / FUERZA CONSTANTE  F = c
     force.addAssign(params.wind.mul(params.windEnabled));
 
-    // 2) RADIAL MULTI-FOCO (8 atractores)  F = k * (A - p) / |A - p|^3
-    // Sumamos la contribución de cada foco. Suavizado con "softening".
     const totalRadialForce = vec3(0.0).toVar();
-
     for (let i = 0; i < 8; i++) {
       const attractorPos = params.attractors[i];
       const toAttractor = attractorPos.sub(p);
       const distance = max(toAttractor.length(), params.softening);
       const radialDirection = toAttractor.div(distance);
-
-      const f = radialDirection
-        .mul(params.radialStrength)
-        .div(distance.pow(2));
-
+      const f = radialDirection.mul(params.radialStrength).div(distance.pow(2));
       totalRadialForce.addAssign(f);
     }
-
     force.addAssign(totalRadialForce.mul(params.radialEnabled));
 
-    // 3) VÓRTICE  F = k * (z × r̂)
-    // Tangente al eje Z respecto al atractor primario (foco 0).
     const primaryDir = params.attractors[0].sub(p).normalize();
     const zAxis = vec3(0.0, 0.0, 1.0);
     const tangent = zAxis.cross(primaryDir);
     force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
 
-    // 4) DRAG LINEAL  F = -c v
     force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
 
-    // INTEGRACIÓN Euler semiimplícito (masa unitaria: a = F)
     v.addAssign(force.mul(dt));
 
     const speed = v.length();
@@ -90,12 +72,10 @@ export function createSimulation({ renderer, scene, params, count = 300000 }) {
 
     p.addAssign(v.mul(dt));
 
-    // Fronteras periódicas: lo que sale por un lado entra por el opuesto.
     const half = params.boundsSize.mul(0.5);
     p.assign(mod(p.add(half), params.boundsSize).sub(half));
   })().compute(count).setName('Update Particles');
 
-  // RENDER ---------------------------------------------------------------
   const material = new THREE.SpriteNodeMaterial({
     blending: THREE.AdditiveBlending,
     depthWrite: false,
@@ -105,22 +85,19 @@ export function createSimulation({ renderer, scene, params, count = 300000 }) {
   material.positionNode = positionBuffer.toAttribute();
   material.scaleNode = params.particleSize;
 
-  // Magnitud de velocidad → color (paleta de 3 puntos)
   const velAttr = velocityBuffer.toAttribute();
   const speed = velAttr.length();
   const t = speed.div(params.maxSpeed).clamp(0.0, 1.0);
 
-  const cobaltBlue = color('#0047ab'); // lento
-  const purple     = color('#7a1fa0'); // medio
-  const crimsonRed = color('#d12e2e'); // rápido
+  const cobaltBlue = color('#0047ab');
+  const purple = color('#7a1fa0');
+  const crimsonRed = color('#d12e2e');
 
-  const lowToMid  = mix(cobaltBlue, purple, t.mul(2.0).clamp(0.0, 1.0));
+  const lowToMid = mix(cobaltBlue, purple, t.mul(2.0).clamp(0.0, 1.0));
   const midToHigh = mix(purple, crimsonRed, t.sub(0.5).mul(2.0).clamp(0.0, 1.0));
-  const finalRGB  = mix(lowToMid, midToHigh, step(0.5, t));
+  const finalRGB = mix(lowToMid, midToHigh, step(0.5, t));
 
   material.colorNode = vec4(finalRGB, 1.0);
-
-  // Máscara circular para evitar sprites cuadrados visibles.
   material.opacityNode = step(uv().xy.sub(0.5).length(), 0.5);
 
   const geometry = new THREE.PlaneGeometry(1, 1);
@@ -140,7 +117,6 @@ export function createSimulation({ renderer, scene, params, count = 300000 }) {
     geometry.dispose();
     material.dispose();
     scene.remove(mesh);
-    // Nota: los storage buffers de instancedArray se liberan con el renderer.
   }
 
   return {

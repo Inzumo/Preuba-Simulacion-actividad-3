@@ -7,7 +7,7 @@ import { createParameters } from './simulation/parameters.js';
 import { createSimulation } from './simulation/createSimulation.js';
 import { createLabPanel } from './ui/labPanel.js';
 
-const PARTICLE_COUNT = 300000; // 2^18 aprox. Baja si el rendimiento cae.
+const PARTICLE_COUNT = 300000;
 const NUM_ATTRACTORS = 8;
 
 async function main() {
@@ -18,7 +18,6 @@ async function main() {
     throw new Error('Este proyecto requiere WebGPU para ejecutar compute shaders.');
   }
 
-  // ESCENA / CÁMARA / RENDERER -------------------------------------------
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#050607');
 
@@ -37,7 +36,6 @@ async function main() {
 
   const params = createParameters();
 
-  // MULTI-ATRACTORES Y HELPERS VISUALES ----------------------------------
   const attractors = Array.from({ length: NUM_ATTRACTORS }, () => new THREE.Vector3());
   const attractorHelpersGroup = new THREE.Group();
   scene.add(attractorHelpersGroup);
@@ -52,7 +50,6 @@ async function main() {
   const axes = new THREE.AxesHelper(1.5);
   scene.add(axes);
 
-  // Reposiciona los 8 atractores aleatoriamente con separación mínima.
   const triggerRandomAttractors = () => {
     const rangeX = 9.0;
     const rangeY = 7.0;
@@ -91,7 +88,6 @@ async function main() {
 
   const simulation = createSimulation({ renderer, scene, params, count: PARTICLE_COUNT });
 
-  // INTERACCIÓN CON PUNTERO (ventaja tuya que conservamos) ---------------
   const pointerNdc = new THREE.Vector2();
   const raycaster = new THREE.Raycaster();
   const interactionPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -102,19 +98,16 @@ async function main() {
     pointerNdc.y = -(event.clientY / innerHeight) * 2 + 1;
     raycaster.setFromCamera(pointerNdc, camera);
     if (raycaster.ray.intersectPlane(interactionPlane, hit)) {
-      // Solo movemos el atractor primario con el puntero.
       params.attractors[0].value.copy(hit);
       attractorHelpersGroup.children[0].position.copy(hit);
       attractors[0].copy(hit);
     }
   });
 
-  // ESTADO DEL INSTRUMENTO -----------------------------------------------
   let paused = false;
   let mode = 'LAB';
   let panel;
 
-  // LAB: presets 1–5 -----------------------------------------------------
   const applyPreset = (id) => {
     params.windEnabled.value = 0;
     params.radialEnabled.value = 0;
@@ -146,15 +139,12 @@ async function main() {
     panel?.refresh();
   };
 
-  // PERFORMANCE: instrumento interpretativo ------------------------------
-  // Cada tecla mapea a UNA decisión expresiva. "approach" suaviza el cambio
-  // para que se sienta como conducir, no como teletransportar parámetros.
   const keys = {
-    KeyW: false, KeyS: false,   // tensión radial
-    KeyA: false, KeyD: false,   // rotación (vórtice)
-    KeyQ: false, KeyE: false,   // viento
-    KeyZ: false, KeyX: false,   // energía (drag)
-    KeyF: false, KeyG: false    // tamaño
+    KeyW: false, KeyS: false,
+    KeyA: false, KeyD: false,
+    KeyQ: false, KeyE: false,
+    KeyZ: false, KeyX: false,
+    KeyF: false, KeyG: false
   };
 
   const performanceBase = {
@@ -181,7 +171,6 @@ async function main() {
   function updatePerformanceInstrument() {
     if (mode !== 'PERFORMANCE') return;
 
-    // 1) Tensión radial (W atrae fuerte / S repele fuerte)
     let radialTarget = performanceBase.radialStrength;
     if (keys.KeyW && !keys.KeyS) radialTarget = performanceRanges.radialMax;
     else if (keys.KeyS && !keys.KeyW) radialTarget = -performanceRanges.radialMax;
@@ -189,7 +178,6 @@ async function main() {
     params.radialEnabled.value = 1;
     params.radialStrength.value = approach(params.radialStrength.value, radialTarget, 0.06);
 
-    // 2) Vórtice (A / D)
     let vortexTarget = performanceBase.vortexStrength;
     if (keys.KeyA && !keys.KeyD) vortexTarget = performanceRanges.vortexMax;
     else if (keys.KeyD && !keys.KeyA) vortexTarget = -performanceRanges.vortexMax;
@@ -197,7 +185,6 @@ async function main() {
     params.vortexEnabled.value = 1;
     params.vortexStrength.value = approach(params.vortexStrength.value, vortexTarget, 0.07);
 
-    // 3) Viento (Q / E)
     let windTarget = performanceBase.windX;
     if (keys.KeyQ && !keys.KeyE) windTarget = -performanceRanges.windMax;
     else if (keys.KeyE && !keys.KeyQ) windTarget = performanceRanges.windMax;
@@ -207,7 +194,6 @@ async function main() {
     params.wind.value.y = 0;
     params.wind.value.z = 0;
 
-    // 4) Energía / memoria (Z frena mucho / X frena poco)
     let dragTarget = performanceBase.dragCoefficient;
     if (keys.KeyZ && !keys.KeyX) dragTarget = performanceRanges.dragMax;
     else if (keys.KeyX && !keys.KeyZ) dragTarget = performanceRanges.dragMin;
@@ -215,7 +201,6 @@ async function main() {
     params.dragEnabled.value = 1;
     params.dragCoefficient.value = approach(params.dragCoefficient.value, dragTarget, 0.06);
 
-    // 5) Tamaño (F aumenta / G disminuye)
     if (keys.KeyF) {
       params.particleSize.value = Math.min(
         performanceRanges.sizeMax,
@@ -245,7 +230,6 @@ async function main() {
     Object.keys(keys).forEach((k) => (keys[k] = false));
   }
 
-  // MODO (LAB / PERFORMANCE) ---------------------------------------------
   const hud = document.createElement('div');
   hud.className = 'hud';
   document.body.append(hud);
@@ -258,17 +242,7 @@ async function main() {
     attractorHelpersGroup.visible = lab;
     hud.innerHTML = lab
       ? '<strong>LAB</strong> · P: performance · R: reset · 1–5: pruebas'
-      : `
-        <strong>PERFORMANCE</strong><br>
-        W/S · tensión &nbsp;&nbsp;
-        A/D · rotación &nbsp;&nbsp;
-        Q/E · viento &nbsp;&nbsp;
-        Z/X · energía &nbsp;&nbsp;
-        F/G · tamaño &nbsp;&nbsp;
-        mouse · mover foco principal &nbsp;&nbsp;
-        R · reset &nbsp;&nbsp;
-        P · LAB
-      `;
+      : '<strong>PERFORMANCE</strong><br>W/S tension · A/D rotation · Q/E wind · Z/X energy · F/G size · mouse focus · R reset · P lab';
   };
 
   panel = createLabPanel({
@@ -281,7 +255,6 @@ async function main() {
 
   setMode('LAB');
 
-  // TECLADO --------------------------------------------------------------
   addEventListener('keydown', (event) => {
     if (event.code in keys) {
       if (!keys[event.code]) {
@@ -332,11 +305,9 @@ async function main() {
     renderer.setSize(innerWidth, innerHeight);
   });
 
-  // Arranque
   triggerRandomAttractors();
   simulation.reset();
 
-  // FRAME LOOP -----------------------------------------------------------
   renderer.setAnimationLoop(() => {
     if (!paused) {
       updatePerformanceInstrument();
