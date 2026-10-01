@@ -1,8 +1,10 @@
-iimport { defineConfig } from 'vite';
+import { defineConfig } from 'vite';
 
+// Relative assets make the same build work locally and under
+// https://<user>.github.io/<repository>/ without hard-coding the repo name.
 export default defineConfig({
-  base: '/Preuba-Simulacion-actividad-3/',
+  base: './',
   build: {
-    target: 'esnext'
+    target: 'es2022'
   }
 });
