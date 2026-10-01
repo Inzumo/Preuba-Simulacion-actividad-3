@@ -7,22 +7,8 @@ import { createParameters } from './simulation/parameters.js';
 import { createSimulation } from './simulation/createSimulation.js';
 import { createLabPanel } from './ui/labPanel.js';
 
-
-
-/*
-2^15: 32768
-2^16: 65536
-2^17: 131072
-2^18: 262144
-2^19: 524288
-2^20: 1048576
-2^21: 2097152
-2^22: 4194304
-2^23: 8388608
-2^24: 16777216
-*/
-
-const PARTICLE_COUNT = 131072; //2^17. Increase only after measuring performance.
+const PARTICLE_COUNT = 300000; // 2^18 aprox. Baja si el rendimiento cae.
+const NUM_ATTRACTORS = 8;
 
 async function main() {
   const mount = document.querySelector('#app');
@@ -32,12 +18,12 @@ async function main() {
     throw new Error('Este proyecto requiere WebGPU para ejecutar compute shaders.');
   }
 
-  // THREE.JS MENTAL MODEL: scene + camera + renderer ---------------------
+  // ESCENA / CÁMARA / RENDERER -------------------------------------------
   const scene = new THREE.Scene();
   scene.background = new THREE.Color('#050607');
 
   const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 100);
-  camera.position.set(0, 0, 11);
+  camera.position.set(0, 0, 14);
 
   const renderer = new THREE.WebGPURenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -50,19 +36,62 @@ async function main() {
   orbit.target.set(0, 0, 0);
 
   const params = createParameters();
-  const simulation = createSimulation({ renderer, scene, params, count: PARTICLE_COUNT });
 
-  // LAB HELPERS -----------------------------------------------------------
-  const attractorHelper = new THREE.Mesh(
-    new THREE.SphereGeometry(0.12, 16, 12),
-    new THREE.MeshBasicMaterial({ color: '#ffffff' })
-  );
-  scene.add(attractorHelper);
+  // MULTI-ATRACTORES Y HELPERS VISUALES ----------------------------------
+  const attractors = Array.from({ length: NUM_ATTRACTORS }, () => new THREE.Vector3());
+  const attractorHelpersGroup = new THREE.Group();
+  scene.add(attractorHelpersGroup);
+
+  const sphereGeo = new THREE.SphereGeometry(0.1, 16, 12);
+  const sphereMat = new THREE.MeshBasicMaterial({ color: '#ffffff' });
+
+  for (let i = 0; i < NUM_ATTRACTORS; i++) {
+    attractorHelpersGroup.add(new THREE.Mesh(sphereGeo, sphereMat));
+  }
+
   const axes = new THREE.AxesHelper(1.5);
   scene.add(axes);
 
-  // POINTER -> WORLD POSITION --------------------------------------------
-  // This is a useful camera concept: screen coordinates are not world coords.
+  // Reposiciona los 8 atractores aleatoriamente con separación mínima.
+  const triggerRandomAttractors = () => {
+    const rangeX = 9.0;
+    const rangeY = 7.0;
+    const rangeZ = 6.0;
+    const minDistance = 4.5;
+
+    attractors.forEach((attractor, i) => {
+      let candidate = new THREE.Vector3();
+      let valid = false;
+      let attempts = 0;
+
+      while (!valid && attempts < 15) {
+        candidate.set(
+          (Math.random() - 0.5) * rangeX,
+          (Math.random() - 0.5) * rangeY,
+          (Math.random() - 0.5) * rangeZ
+        );
+        valid = true;
+        for (let j = 0; j < i; j++) {
+          if (candidate.distanceTo(attractors[j]) < minDistance) {
+            valid = false;
+            break;
+          }
+        }
+        attempts++;
+      }
+
+      attractor.copy(candidate);
+      attractorHelpersGroup.children[i].position.copy(attractor);
+
+      if (params.attractors && params.attractors[i]) {
+        params.attractors[i].value.copy(attractor);
+      }
+    });
+  };
+
+  const simulation = createSimulation({ renderer, scene, params, count: PARTICLE_COUNT });
+
+  // INTERACCIÓN CON PUNTERO (ventaja tuya que conservamos) ---------------
   const pointerNdc = new THREE.Vector2();
   const raycaster = new THREE.Raycaster();
   const interactionPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -73,17 +102,19 @@ async function main() {
     pointerNdc.y = -(event.clientY / innerHeight) * 2 + 1;
     raycaster.setFromCamera(pointerNdc, camera);
     if (raycaster.ray.intersectPlane(interactionPlane, hit)) {
-      params.attractor.value.copy(hit);
-      attractorHelper.position.copy(hit);
+      // Solo movemos el atractor primario con el puntero.
+      params.attractors[0].value.copy(hit);
+      attractorHelpersGroup.children[0].position.copy(hit);
+      attractors[0].copy(hit);
     }
   });
 
+  // ESTADO DEL INSTRUMENTO -----------------------------------------------
   let paused = false;
   let mode = 'LAB';
   let panel;
-  let savedRadialStrength = params.radialStrength.value;
-  let savedRadialEnabled = params.radialEnabled.value;
 
+  // LAB: presets 1–5 -----------------------------------------------------
   const applyPreset = (id) => {
     params.windEnabled.value = 0;
     params.radialEnabled.value = 0;
@@ -115,17 +146,129 @@ async function main() {
     panel?.refresh();
   };
 
+  // PERFORMANCE: instrumento interpretativo ------------------------------
+  // Cada tecla mapea a UNA decisión expresiva. "approach" suaviza el cambio
+  // para que se sienta como conducir, no como teletransportar parámetros.
+  const keys = {
+    KeyW: false, KeyS: false,   // tensión radial
+    KeyA: false, KeyD: false,   // rotación (vórtice)
+    KeyQ: false, KeyE: false,   // viento
+    KeyZ: false, KeyX: false,   // energía (drag)
+    KeyF: false, KeyG: false    // tamaño
+  };
+
+  const performanceBase = {
+    radialStrength: 0.35,
+    vortexStrength: 0.15,
+    windX: 0.0,
+    dragCoefficient: 0.22,
+    particleSize: 0.02
+  };
+
+  const performanceRanges = {
+    radialMax: 3.0,
+    vortexMax: 3.0,
+    windMax: 1.8,
+    dragMin: 0.03,
+    dragMax: 0.65,
+    sizeMin: 0.005,
+    sizeMax: 0.12
+  };
+
+  const approach = (current, target, amount = 0.08) =>
+    current + (target - current) * amount;
+
+  function updatePerformanceInstrument() {
+    if (mode !== 'PERFORMANCE') return;
+
+    // 1) Tensión radial (W atrae fuerte / S repele fuerte)
+    let radialTarget = performanceBase.radialStrength;
+    if (keys.KeyW && !keys.KeyS) radialTarget = performanceRanges.radialMax;
+    else if (keys.KeyS && !keys.KeyW) radialTarget = -performanceRanges.radialMax;
+
+    params.radialEnabled.value = 1;
+    params.radialStrength.value = approach(params.radialStrength.value, radialTarget, 0.06);
+
+    // 2) Vórtice (A / D)
+    let vortexTarget = performanceBase.vortexStrength;
+    if (keys.KeyA && !keys.KeyD) vortexTarget = performanceRanges.vortexMax;
+    else if (keys.KeyD && !keys.KeyA) vortexTarget = -performanceRanges.vortexMax;
+
+    params.vortexEnabled.value = 1;
+    params.vortexStrength.value = approach(params.vortexStrength.value, vortexTarget, 0.07);
+
+    // 3) Viento (Q / E)
+    let windTarget = performanceBase.windX;
+    if (keys.KeyQ && !keys.KeyE) windTarget = -performanceRanges.windMax;
+    else if (keys.KeyE && !keys.KeyQ) windTarget = performanceRanges.windMax;
+
+    params.windEnabled.value = 1;
+    params.wind.value.x = approach(params.wind.value.x, windTarget, 0.08);
+    params.wind.value.y = 0;
+    params.wind.value.z = 0;
+
+    // 4) Energía / memoria (Z frena mucho / X frena poco)
+    let dragTarget = performanceBase.dragCoefficient;
+    if (keys.KeyZ && !keys.KeyX) dragTarget = performanceRanges.dragMax;
+    else if (keys.KeyX && !keys.KeyZ) dragTarget = performanceRanges.dragMin;
+
+    params.dragEnabled.value = 1;
+    params.dragCoefficient.value = approach(params.dragCoefficient.value, dragTarget, 0.06);
+
+    // 5) Tamaño (F aumenta / G disminuye)
+    if (keys.KeyF) {
+      params.particleSize.value = Math.min(
+        performanceRanges.sizeMax,
+        params.particleSize.value + 0.001
+      );
+      panel?.refresh();
+    } else if (keys.KeyG) {
+      params.particleSize.value = Math.max(
+        performanceRanges.sizeMin,
+        params.particleSize.value - 0.001
+      );
+      panel?.refresh();
+    }
+  }
+
+  function setPerformanceNeutral() {
+    params.radialEnabled.value = 1;
+    params.vortexEnabled.value = 1;
+    params.windEnabled.value = 1;
+    params.dragEnabled.value = 1;
+
+    params.radialStrength.value = performanceBase.radialStrength;
+    params.vortexStrength.value = performanceBase.vortexStrength;
+    params.wind.value.set(performanceBase.windX, 0, 0);
+    params.dragCoefficient.value = performanceBase.dragCoefficient;
+
+    Object.keys(keys).forEach((k) => (keys[k] = false));
+  }
+
+  // MODO (LAB / PERFORMANCE) ---------------------------------------------
+  const hud = document.createElement('div');
+  hud.className = 'hud';
+  document.body.append(hud);
+
   const setMode = (next) => {
     mode = next;
     const lab = mode === 'LAB';
     panel.setVisible(lab);
     axes.visible = lab;
-    attractorHelper.visible = lab;
-    //orbit.enabled = lab;
+    attractorHelpersGroup.visible = lab;
     hud.innerHTML = lab
       ? '<strong>LAB</strong> · P: performance · R: reset · 1–5: pruebas'
-      //: '<strong>PERFORMANCE</strong> · P: lab · espacio: invertir radial · puntero: atractor';
-      : '';
+      : `
+        <strong>PERFORMANCE</strong><br>
+        W/S · tensión &nbsp;&nbsp;
+        A/D · rotación &nbsp;&nbsp;
+        Q/E · viento &nbsp;&nbsp;
+        Z/X · energía &nbsp;&nbsp;
+        F/G · tamaño &nbsp;&nbsp;
+        mouse · mover foco principal &nbsp;&nbsp;
+        R · reset &nbsp;&nbsp;
+        P · LAB
+      `;
   };
 
   panel = createLabPanel({
@@ -133,42 +276,53 @@ async function main() {
     onReset: () => simulation.reset(),
     onPreset: applyPreset,
     onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB'),
-    onPauseChange: () => paused = !paused
+    onPauseChange: () => (paused = !paused)
   });
 
-  const hud = document.createElement('div');
-  hud.className = 'hud';
-  document.body.append(hud);
   setMode('LAB');
 
-  // BASELINE LIVE INSTRUMENT MAPPING -------------------------------------
-  // Students are expected to redesign this mapping for their own instrument.
+  // TECLADO --------------------------------------------------------------
   addEventListener('keydown', (event) => {
-    //console.log('radial inverted', params.radialStrength.value);
-    if (event.repeat) return;
-    if (event.code === 'KeyP') setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB');
-    if (event.code === 'KeyR') simulation.reset();
-    if (event.code === 'Digit1') applyPreset('inertia');
-    if (event.code === 'Digit2') applyPreset('wind');
-    if (event.code === 'Digit3') applyPreset('attract');
-    if (event.code === 'Digit4') applyPreset('repel');
-    if (event.code === 'Digit5') applyPreset('vortex');
-
-    if (event.code === 'Space') {
+    if (event.code in keys) {
+      if (!keys[event.code]) {
+        keys[event.code] = true;
+        if (mode === 'PERFORMANCE') triggerRandomAttractors();
+      }
       event.preventDefault();
-      //savedRadialStrength = params.radialStrength.value || 2.0;
-      savedRadialStrength = params.radialStrength.value;
-      savedRadialEnabled = params.radialEnabled.value;
-      params.radialEnabled.value = 1;
-      params.radialStrength.value = -(savedRadialStrength || 2.0);
-      //console.log('radial inverted', params.radialStrength.value);
+      return;
+    }
+
+    if (event.code === 'KeyP') {
+      setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB');
+      if (mode === 'PERFORMANCE') {
+        setPerformanceNeutral();
+        triggerRandomAttractors();
+      }
+      return;
+    }
+
+    if (event.code === 'KeyR') {
+      simulation.reset();
+      if (mode === 'PERFORMANCE') {
+        setPerformanceNeutral();
+        triggerRandomAttractors();
+      }
+      return;
+    }
+
+    if (mode === 'LAB' && !event.repeat) {
+      if (event.code === 'Digit1') applyPreset('inertia');
+      if (event.code === 'Digit2') applyPreset('wind');
+      if (event.code === 'Digit3') applyPreset('attract');
+      if (event.code === 'Digit4') applyPreset('repel');
+      if (event.code === 'Digit5') applyPreset('vortex');
     }
   });
 
   addEventListener('keyup', (event) => {
-    if (event.code === 'Space') {
-      params.radialEnabled.value = savedRadialEnabled;
-      params.radialStrength.value = savedRadialStrength;
+    if (event.code in keys) {
+      keys[event.code] = false;
+      event.preventDefault();
     }
   });
 
@@ -178,11 +332,16 @@ async function main() {
     renderer.setSize(innerWidth, innerHeight);
   });
 
+  // Arranque
+  triggerRandomAttractors();
   simulation.reset();
 
-  // FRAME LOOP ------------------------------------------------------------
+  // FRAME LOOP -----------------------------------------------------------
   renderer.setAnimationLoop(() => {
-    if (!paused) simulation.stepSimulation();
+    if (!paused) {
+      updatePerformanceInstrument();
+      simulation.stepSimulation();
+    }
     orbit.update();
     renderer.render(scene, camera);
   });
@@ -191,7 +350,8 @@ async function main() {
 main().catch((error) => {
   console.error(error);
   const pre = document.createElement('pre');
-  pre.style.cssText = 'position:fixed;inset:16px;white-space:pre-wrap;color:#fff;z-index:50';
+  pre.style.cssText =
+    'position:fixed;inset:16px;white-space:pre-wrap;color:#fff;z-index:50';
   pre.textContent = String(error?.stack || error);
   document.body.append(pre);
 });
