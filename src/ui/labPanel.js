@@ -1,4 +1,4 @@
-ffunction rangeRow(parent, label, param, min, max, step) {
+function rangeRow(parent, label, param, min, max, step) {
   const wrap = document.createElement('div');
   wrap.className = 'row';
   const lab = document.createElement('label');
@@ -17,6 +17,34 @@ ffunction rangeRow(parent, label, param, min, max, step) {
 
   const refresh = () => {
     param.value = Number(input.value);
+    value.textContent = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
+  };
+  input.addEventListener('input', refresh);
+  refresh();
+  wrap.append(lab, input);
+  parent.append(wrap);
+  return { input, refresh };
+}
+
+function vectorRow(parent, label, vector, component, min, max, step) {
+  const wrap = document.createElement('div');
+  wrap.className = 'row';
+  const lab = document.createElement('label');
+  const name = document.createElement('span');
+  const value = document.createElement('span');
+  value.className = 'value';
+  name.textContent = label;
+  lab.append(name, value);
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = String(min);
+  input.max = String(max);
+  input.step = String(step);
+  input.value = String(vector[component]);
+
+  const refresh = () => {
+    vector[component] = Number(input.value);
     value.textContent = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
   };
   input.addEventListener('input', refresh);
@@ -81,10 +109,9 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
   refreshers.push(checkRow(force, 'Drag', params.dragEnabled));
   refreshers.push(rangeRow(force, 'dragCoefficient', params.dragCoefficient, 0, 1, 0.01));
   refreshers.push(checkRow(force, 'Viento', params.windEnabled));
-  refreshers.push(rangeRow(force, 'wind.x', params.wind.value, -4, 4, 0.05, 'x'));
-  refreshers.push(rangeRow(force, 'wind.y', params.wind.value, -4, 4, 0.05, 'y'));
+  refreshers.push(vectorRow(force, 'wind.x', params.wind.value, 'x', -4, 4, 0.05));
+  refreshers.push(vectorRow(force, 'wind.y', params.wind.value, 'y', -4, 4, 0.05));
 
-  // Fuerza propia del estudiante
   const own = document.createElement('div');
   own.className = 'group';
   own.innerHTML = '<h2>Espiral (propia)</h2>';
