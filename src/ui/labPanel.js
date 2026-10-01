@@ -15,11 +15,17 @@ function rangeRow(parent, label, param, min, max, step) {
   input.step = String(step);
   input.value = String(param.value);
 
-  const refresh = () => {
+  const onInput = () => {
     param.value = Number(input.value);
     value.textContent = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
   };
-  input.addEventListener('input', refresh);
+  input.addEventListener('input', onInput);
+
+  const refresh = () => {
+    input.value = String(param.value);
+    value.textContent = Number(param.value).toFixed(step < 0.01 ? 3 : 2);
+  };
+
   refresh();
   wrap.append(lab, input);
   parent.append(wrap);
@@ -43,11 +49,17 @@ function vectorRow(parent, label, vector, component, min, max, step) {
   input.step = String(step);
   input.value = String(vector[component]);
 
-  const refresh = () => {
+  const onInput = () => {
     vector[component] = Number(input.value);
     value.textContent = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
   };
-  input.addEventListener('input', refresh);
+  input.addEventListener('input', onInput);
+
+  const refresh = () => {
+    input.value = String(vector[component]);
+    value.textContent = Number(vector[component]).toFixed(step < 0.01 ? 3 : 2);
+  };
+
   refresh();
   wrap.append(lab, input);
   parent.append(wrap);
@@ -63,13 +75,17 @@ function checkRow(parent, label, param) {
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.checked = param.value > 0;
+
   input.addEventListener('change', () => {
     param.value = input.checked ? 1 : 0;
   });
+
+  const refresh = () => { input.checked = param.value > 0; };
+
   lab.append(name, input);
   wrap.append(lab);
   parent.append(wrap);
-  return { input, refresh: () => { input.checked = param.value > 0; } };
+  return { input, refresh };
 }
 
 function button(parent, label, onClick) {
