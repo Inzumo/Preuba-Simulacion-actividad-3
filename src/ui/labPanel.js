@@ -1,55 +1,87 @@
 function rangeRow(parent, label, param, min, max, step) {
   const wrap = document.createElement('div');
   wrap.className = 'row';
-  
+
   const lab = document.createElement('label');
   const name = document.createElement('span');
   const value = document.createElement('span');
   value.className = 'value';
   name.textContent = label;
   lab.append(name, value);
-  
+
   const input = document.createElement('input');
   input.type = 'range';
   input.min = String(min);
   input.max = String(max);
   input.step = String(step);
   input.value = String(param.value);
-  
+
   const refresh = () => {
     param.value = Number(input.value);
     value.textContent = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
   };
-  
+
   input.addEventListener('input', refresh);
   refresh();
-  
+
   wrap.append(lab, input);
   parent.append(wrap);
-  
+
+  return { input, refresh };
+}
+
+function vectorRow(parent, label, vector, component, min, max, step) {
+  const wrap = document.createElement('div');
+  wrap.className = 'row';
+
+  const lab = document.createElement('label');
+  const name = document.createElement('span');
+  const value = document.createElement('span');
+  value.className = 'value';
+  name.textContent = label;
+  lab.append(name, value);
+
+  const input = document.createElement('input');
+  input.type = 'range';
+  input.min = String(min);
+  input.max = String(max);
+  input.step = String(step);
+  input.value = String(vector[component]);
+
+  const refresh = () => {
+    vector[component] = Number(input.value);
+    value.textContent = Number(input.value).toFixed(step < 0.01 ? 3 : 2);
+  };
+
+  input.addEventListener('input', refresh);
+  refresh();
+
+  wrap.append(lab, input);
+  parent.append(wrap);
+
   return { input, refresh };
 }
 
 function checkRow(parent, label, param) {
   const wrap = document.createElement('div');
   wrap.className = 'row';
-  
+
   const lab = document.createElement('label');
   const name = document.createElement('span');
   name.textContent = label;
-  
+
   const input = document.createElement('input');
   input.type = 'checkbox';
   input.checked = param.value > 0;
-  
+
   input.addEventListener('change', () => {
     param.value = input.checked ? 1 : 0;
   });
-  
+
   lab.append(name, input);
   wrap.append(lab);
   parent.append(wrap);
-  
+
   return { input, refresh: () => { input.checked = param.value > 0; } };
 }
 
@@ -96,8 +128,8 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
   refreshers.push(rangeRow(force, 'Coef. rozamiento', params.dragCoefficient, 0, 1, 0.01));
 
   refreshers.push(checkRow(force, 'Viento', params.windEnabled));
-  refreshers.push(rangeRow(force, 'Viento X', params.windX, -4, 4, 0.05));
-  refreshers.push(rangeRow(force, 'Viento Y', params.windY, -4, 4, 0.05));
+  refreshers.push(vectorRow(force, 'Viento X', params.wind.value, 'x', -4, 4, 0.05));
+  refreshers.push(vectorRow(force, 'Viento Y', params.wind.value, 'y', -4, 4, 0.05));
 
   // Pruebas
   const tests = document.createElement('div');
