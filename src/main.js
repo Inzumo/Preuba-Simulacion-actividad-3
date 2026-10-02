@@ -9,6 +9,10 @@ import { createLabPanel } from './ui/labPanel.js';
 
 const PARTICLE_COUNT = 131072;
 
+const FADE_OUT_MS = 120;
+const HOLD_MS     = 60;
+const FADE_IN_MS  = 120;
+
 async function main() {
   const mount = document.querySelector('#app');
 
@@ -36,7 +40,6 @@ async function main() {
   const params = createParameters();
   const simulation = createSimulation({ renderer, scene, params, count: PARTICLE_COUNT });
 
-  // Helpers LAB
   const attractorHelper = new THREE.Mesh(
     new THREE.SphereGeometry(0.12, 16, 12),
     new THREE.MeshBasicMaterial({ color: '#ffffff' })
@@ -45,7 +48,6 @@ async function main() {
   const axes = new THREE.AxesHelper(1.5);
   scene.add(axes);
 
-  // Puntero → mundo
   const pointerNdc = new THREE.Vector2();
   const raycaster = new THREE.Raycaster();
   const interactionPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -64,9 +66,9 @@ async function main() {
   let paused = false;
   let mode = 'LAB';
   let panel;
+  let transitionId = 0;
 
-  // LAB PRESETS (idénticos al profe) -------------------------------------
-  const applyPreset = (id) => {
+  function applyPresetValues(id) {
     params.windEnabled.value = 0;
     params.radialEnabled.value = 0;
     params.vortexEnabled.value = 0;
@@ -94,7 +96,6 @@ async function main() {
       params.dragEnabled.value = 1;
       params.dragCoefficient.value = 0.08;
     } else if (id === 'spiral') {
-      // Prueba propia del estudiante
       params.radialEnabled.value = 1;
       params.radialStrength.value = 2.0;
       params.spiralEnabled.value = 1;
@@ -103,10 +104,39 @@ async function main() {
       params.dragEnabled.value = 1;
       params.dragCoefficient.value = 0.05;
     }
-    panel?.refresh();
-  };
+  }
 
-  // PERFORMANCE INSTRUMENT -----------------------------------------------
+  function applyPreset(id) {
+    const myId = ++transitionId;
+    const startOpacity = params.globalOpacity.value;
+    const t0 = performance.now();
+
+    const fadeOut = () => {
+      if (myId !== transitionId) return;
+      const e = performance.now() - t0;
+      const t = Math.min(e / FADE_OUT_MS, 1);
+      params.globalOpacity.value = startOpacity * (1 - t);
+      if (t < 1) requestAnimationFrame(fadeOut);
+      else {
+        applyPresetValues(id);
+        simulation.reset();
+
+        const t1 = performance.now();
+        const fadeIn = () => {
+          if (myId !== transitionId) return;
+          const e2 = performance.now() - t1;
+          const tt = Math.min(e2 / FADE_IN_MS, 1);
+          params.globalOpacity.value = tt;
+          if (tt < 1) requestAnimationFrame(fadeIn);
+          else params.globalOpacity.value = 1;
+        };
+        setTimeout(() => requestAnimationFrame(fadeIn), HOLD_MS);
+      }
+    };
+    requestAnimationFrame(fadeOut);
+    panel?.refresh();
+  }
+
   const keys = {
     ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false,
     KeyW: false, KeyS: false,
@@ -131,13 +161,11 @@ async function main() {
     attractorSpeed: 0.15
   };
 
-  const approach = (current, target, amount = 0.08) =>
-    current + (target - current) * amount;
+  const approach = (c, t, a = 0.08) => c + (t - c) * a;
 
   function updatePerformance() {
     if (mode !== 'PERFORMANCE') return;
 
-    // 1) Atractor se mueve con flechas
     const a = params.attractor.value;
     if (keys.ArrowUp) a.y += perfRanges.attractorSpeed;
     if (keys.ArrowDown) a.y -= perfRanges.attractorSpeed;
@@ -145,28 +173,24 @@ async function main() {
     if (keys.ArrowRight) a.x += perfRanges.attractorSpeed;
     attractorHelper.position.copy(a);
 
-    // 2) Intensidad radial (W/S)
     let radialTarget = perfBase.radialStrength;
     if (keys.KeyW && !keys.KeyS) radialTarget = perfRanges.radialMax;
     else if (keys.KeyS && !keys.KeyW) radialTarget = -perfRanges.radialMax;
     params.radialEnabled.value = 1;
     params.radialStrength.value = approach(params.radialStrength.value, radialTarget, 0.06);
 
-    // 3) Intensidad espiral (A/D)
     let spiralTarget = perfBase.spiralStrength;
     if (keys.KeyA && !keys.KeyD) spiralTarget = perfRanges.spiralMax;
     else if (keys.KeyD && !keys.KeyA) spiralTarget = -perfRanges.spiralMax;
     params.spiralEnabled.value = 1;
     params.spiralStrength.value = approach(params.spiralStrength.value, spiralTarget, 0.07);
 
-    // 4) Drag (Q/E)
     let dragTarget = perfBase.dragCoefficient;
     if (keys.KeyQ && !keys.KeyE) dragTarget = perfRanges.dragMax;
     else if (keys.KeyE && !keys.KeyQ) dragTarget = perfRanges.dragMin;
     params.dragEnabled.value = 1;
     params.dragCoefficient.value = approach(params.dragCoefficient.value, dragTarget, 0.06);
 
-    // 5) Tamaño (F/G)
     if (keys.KeyF) {
       params.particleSize.value = Math.min(perfRanges.sizeMax, params.particleSize.value + 0.001);
       panel?.refresh();
@@ -190,7 +214,6 @@ async function main() {
     Object.keys(keys).forEach((k) => (keys[k] = false));
   }
 
-  // HUD / MODOS ----------------------------------------------------------
   const hud = document.createElement('div');
   hud.className = 'hud';
   document.body.append(hud);
@@ -202,7 +225,7 @@ async function main() {
     axes.visible = lab;
     attractorHelper.visible = lab;
     hud.innerHTML = lab
-      ? '<strong>LAB</strong> · P: performance · R: reset · 1–5: pruebas · 6: espiral'
+      ? '<strong>LAB</strong> · P: performance · R: reset · 1–6: pruebas'
       : `<strong>PERFORMANCE</strong><br>
          mouse / flechas · mover atractor<br>
          W/S · tensión radial &nbsp;&nbsp; A/D · espiral<br>
@@ -212,7 +235,7 @@ async function main() {
 
   panel = createLabPanel({
     params,
-    onReset: () => simulation.reset(),
+    onReset: () => applyPreset('attract'),
     onPreset: applyPreset,
     onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB'),
     onPauseChange: () => (paused = !paused)
@@ -220,7 +243,6 @@ async function main() {
 
   setMode('LAB');
 
-  // TECLADO --------------------------------------------------------------
   addEventListener('keydown', (event) => {
     if (event.code in keys) {
       keys[event.code] = true;
@@ -235,14 +257,13 @@ async function main() {
     }
 
     if (event.code === 'KeyR') {
-      simulation.reset();
+      applyPreset('attract');
       if (mode === 'PERFORMANCE') setPerformanceNeutral();
       return;
     }
 
     if (event.code === 'Space') {
       event.preventDefault();
-      // Invierte el sentido de la espiral
       params.spiralDirection.value = -params.spiralDirection.value;
       return;
     }
