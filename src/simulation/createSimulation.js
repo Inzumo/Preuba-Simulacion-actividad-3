@@ -31,60 +31,64 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const dt = params.dt.mul(params.timeScale);
     const force = vec3(0.0).toVar();
 
-    const toAttractor = params.attractor.sub(p);
-    const dist = max(toAttractor.length(), params.softening);
-    const dir = toAttractor.div(dist);
+    const toCenter = params.attractor.sub(p);
+    const dist = max(toCenter.length(), 0.1);
+    const dir = toCenter.div(dist);
     const zAxis = vec3(0.0, 0.0, 1.0);
+    
+    // 1. VÓRTICE CENTRAL (Obliga a orbitar)
     const tangent = zAxis.cross(dir);
+    force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled).div(dist.mul(0.2).add(1.0)));
 
-    force.addAssign(params.wind.mul(params.windEnabled));
+    // 2. FUERZA DE RESONANCIA (Ondas que empujan hacia afuera desde el centro)
+    // Usamos el tiempo para crear anillos de choque
+    const wave = sin(dist.mul(2.0).sub(time.mul(10.0)));
+    const pulsePush = dir.mul(wave).mul(params.pulseStrength).mul(params.pulseEnabled);
+    force.addAssign(pulsePush);
 
-    const radialForce = dir.mul(params.radialStrength).div(dist.pow(2)).mul(params.radialEnabled);
-    force.addAssign(radialForce);
-
-    force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
-
-    force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
-
-    const blackHoleForce = dir.mul(params.gravityStrength).div(dist.mul(0.5).add(1.0)).mul(params.gravityEnabled);
-    force.addAssign(blackHoleForce);
-
-    const t = time.mul(1.5);
-    const turbX = sin(p.y.mul(2.0).add(t)).mul(cos(p.z.mul(2.0).add(t)));
-    const turbY = sin(p.z.mul(2.0).add(t)).mul(cos(p.x.mul(2.0).add(t)));
-    const turbZ = sin(p.x.mul(2.0).add(t)).mul(cos(p.y.mul(2.0).add(t)));
+    // 3. TURBULENCIA MAGNÉTICA (Ondas cruzadas)
+    const t = time.mul(2.0);
+    const turbX = sin(p.y.mul(3.0).add(t)).mul(cos(p.z.mul(2.0).add(t)));
+    const turbY = sin(p.z.mul(3.0).add(t)).mul(cos(p.x.mul(2.0).add(t)));
+    const turbZ = sin(p.x.mul(3.0).add(t)).mul(cos(p.y.mul(2.0).add(t)));
     force.addAssign(vec3(turbX, turbY, turbZ).mul(params.turbStrength).mul(params.turbEnabled));
 
-    // Escudo anti-colapso
-    const pushOut = smoothstep(1.5, 0.0, dist).mul(30.0).mul(params.gravityEnabled);
-    force.addAssign(dir.mul(pushOut).mul(-1.0));
+    // Fricción base para que no se aceleren al infinito
+    force.addAssign(v.mul(-0.05));
 
+    // INTEGRACIÓN
     v.addAssign(force.mul(dt));
     const speed = v.length();
     If(speed.greaterThan(params.maxSpeed), () => v.assign(v.normalize().mul(params.maxSpeed)));
     p.addAssign(v.mul(dt));
 
-    const half = params.boundsSize.mul(0.5);
-    p.assign(mod(p.add(half), params.boundsSize).sub(half));
+    // Contenedor circular
+    const distFromCenter = p.length();
+    If(distFromCenter.greaterThan(params.boundsSize), () => p.assign(p.normalize().mul(params.boundsSize)));
   })().compute(count).setName('Update Particles');
 
+  // RENDER (Iluminación basada en velocidad, no en el ratón)
   const material = new THREE.SpriteNodeMaterial({
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
   });
 
   material.positionNode = positionBuffer.toAttribute();
   
-  const distToCenter = positionBuffer.toAttribute().sub(params.attractor).length();
-  const coreProximity = distToCenter.div(params.boundsSize).clamp(0.0, 1.0).oneMinus().pow(2.0);
-  
-  material.scaleNode = params.particleSize.mul(coreProximity.mul(3.0).add(0.5));
+  const speedAttr = velocityBuffer.toAttribute().length();
+  const speedNorm = speedAttr.div(params.maxSpeed).clamp(0.0, 1.0);
+
+  // Tamaño reactivo a la velocidad
+  material.scaleNode = params.particleSize.mul(speedNorm.mul(3.0).add(0.5));
 
   material.colorNode = Fn(() => {
-    const deepBlue = color('#050022'); const purple = color('#8A00FF');
-    const orange = color('#FF3300'); const white = color('#FFFFFF');
-    const mix1 = mix(deepBlue, purple, coreProximity.mul(3.0).clamp(0.0, 1.0));
-    const mix2 = mix(mix1, orange, coreProximity.sub(0.33).mul(3.0).clamp(0.0, 1.0));
-    const finalRGB = mix(mix2, white, coreProximity.sub(0.66).mul(3.0).clamp(0.0, 1.0));
+    // Paleta de plasma: Azul profundo (lento) -> Cian (medio) -> Blanco incandescente (rápido)
+    const deepBlue = color('#020033');
+    const cyan = color('#00FFFF');
+    const white = color('#FFFFFF');
+
+    const mix1 = mix(deepBlue, cyan, speedNorm.mul(2.0).clamp(0.0, 1.0));
+    const finalRGB = mix(mix1, white, speedNorm.sub(0.5).mul(2.0).clamp(0.0, 1.0));
+
     return vec4(finalRGB, 1.0);
   })();
 
