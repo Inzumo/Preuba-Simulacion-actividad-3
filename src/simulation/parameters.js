@@ -5,17 +5,36 @@ export function createParameters() {
   return {
     dt: uniform(1 / 60),
     timeScale: uniform(1.0),
-    maxSpeed: uniform(6.0),
-    boundsSize: uniform(15.0), // Más grande para que viajen más
-    particleSize: uniform(0.05),
+    initialSpeed: uniform(0.0),
+    maxSpeed: uniform(8.0),
+    boundsSize: uniform(16.0),
+    particleSize: uniform(0.04),
     globalOpacity: uniform(1.0),
 
-    // El corazón del sistema: Agujero Negro
-    gravityStrength: uniform(8.0),
-    swirlStrength: uniform(3.0),
-    eventHorizon: uniform(1.5), // Radio de seguridad para que no colapsen
+    // 1. Fuerza Constante (Viento)
+    windEnabled: uniform(0.0),
+    wind: uniform(new THREE.Vector3(0.0, 0.0, 0.0)),
 
-    // Atractor (posición del agujero negro)
-    attractor: uniform(new THREE.Vector3(0.0, 0.0, 0.0))
+    // 2. Fuerza Radial (Atracción/Repulsión base)
+    radialEnabled: uniform(0.0),
+    attractor: uniform(new THREE.Vector3(0.0, 0.0, 0.0)),
+    radialStrength: uniform(2.0),
+    softening: uniform(0.5),
+
+    // 3. Fuerza de Vórtice (Giro base)
+    vortexEnabled: uniform(0.0),
+    vortexStrength: uniform(2.0),
+
+    // 4. Drag (Fricción)
+    dragEnabled: uniform(1.0),
+    dragCoefficient: uniform(0.1),
+
+    // 5. FUERZA PROPIA: Gravedad de Agujero Negro (Inversa)
+    gravityEnabled: uniform(0.0),
+    gravityStrength: uniform(10.0),
+
+    // 6. FUERZA PROPIA: Turbulencia Cósmica
+    turbEnabled: uniform(0.0),
+    turbStrength: uniform(3.0)
   };
 }

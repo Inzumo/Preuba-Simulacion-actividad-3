@@ -1,22 +1,7 @@
 import * as THREE from 'three/webgpu';
 import {
-  Fn,
-  If,
-  color,
-  hash,
-  instanceIndex,
-  instancedArray,
-  max,
-  mix,
-  mod,
-  step,
-  uint,
-  uv,
-  vec3,
-  vec4,
-  sin,
-  cos,
-  smoothstep
+  Fn, If, color, hash, instanceIndex, instancedArray, max, mix, mod,
+  step, uint, uv, vec3, vec4, sin, cos, smoothstep, time
 } from 'three/tsl';
 
 export function createSimulation({ renderer, scene, params, count = 131072 }) {
@@ -28,14 +13,15 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const p = positionBuffer.element(i);
     const v = velocityBuffer.element(i);
 
-    // Nacen en los bordes del espacio (lejos del centro)
-    const angle = hash(i.add(uint(13))).mul(Math.PI * 2.0);
-    const radius = hash(i.add(uint(23))).mul(params.boundsSize.mul(0.5));
-    const height = hash(i.add(uint(37))).sub(0.5).mul(4.0);
-    
-    p.assign(vec3(cos(angle).mul(radius), height, sin(angle).mul(radius)));
-    // Nacen girando
-    v.assign(vec3(sin(angle).mul(2.0), 0.0, cos(angle).mul(2.0)));
+    const r1 = hash(i.add(uint(11)));
+    const r2 = hash(i.add(uint(23)));
+    const r3 = hash(i.add(uint(37)));
+    const r4 = hash(i.add(uint(53)));
+    const r5 = hash(i.add(uint(71)));
+    const r6 = hash(i.add(uint(89)));
+
+    p.assign(vec3(r1, r2, r3).sub(0.5).mul(params.boundsSize.mul(0.8)));
+    v.assign(vec3(r4, r5, r6).sub(0.5).mul(params.initialSpeed));
   })().compute(count).setName('Initialize Particles');
 
   const updateParticles = Fn(() => {
@@ -45,93 +31,82 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const dt = params.dt.mul(params.timeScale);
     const force = vec3(0.0).toVar();
 
-    // 1) GRAVEDAD DEL AGUJERO NEGRO
-    const toCenter = params.attractor.sub(p);
-    const dist = max(toCenter.length(), 0.1);
-    const dir = toCenter.div(dist);
-    
-    // Fuerza inversamente proporcional a la distancia
-    const gravityForce = dir.mul(params.gravityStrength).div(dist.mul(0.5).add(1.0));
-    force.addAssign(gravityForce);
-
-    // 2) FUERZA DE TORBELLINO (Swirl) - Hace que giren alrededor
-    const zAxis = vec3(0.0, 1.0, 0.0); // Giran en el eje Y
+    const toAttractor = params.attractor.sub(p);
+    const dist = max(toAttractor.length(), params.softening);
+    const dir = toAttractor.div(dist);
+    const zAxis = vec3(0.0, 0.0, 1.0);
     const tangent = zAxis.cross(dir);
-    force.addAssign(tangent.mul(params.swirlStrength).div(dist.mul(0.3).add(1.0)));
 
-    // 3) ESCUDO (Para que no colapsen en el centro)
-    // Si la distancia es menor al "event horizon", empujamos hacia afuera
-    const pushOut = smoothstep(params.eventHorizon, 0.0, dist).mul(20.0);
+    // 1) VIENTO
+    force.addAssign(params.wind.mul(params.windEnabled));
+
+    // 2) RADIAL
+    const radialForce = dir.mul(params.radialStrength).div(dist.pow(2)).mul(params.radialEnabled);
+    force.addAssign(radialForce);
+
+    // 3) VÓRTICE
+    force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
+
+    // 4) DRAG
+    force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
+
+    // 5) GRAVEDAD AGUJERO NEGRO (Fuerza propia)
+    const blackHoleForce = dir.mul(params.gravityStrength).div(dist.mul(0.5).add(1.0)).mul(params.gravityEnabled);
+    force.addAssign(blackHoleForce);
+
+    // 6) TURBULENCIA CÓSMICA (Fuerza propia)
+    const t = time.mul(1.5);
+    const turbX = sin(p.y.mul(2.0).add(t)).mul(cos(p.z.mul(2.0).add(t)));
+    const turbY = sin(p.z.mul(2.0).add(t)).mul(cos(p.x.mul(2.0).add(t)));
+    const turbZ = sin(p.x.mul(2.0).add(t)).mul(cos(p.y.mul(2.0).add(t)));
+    force.addAssign(vec3(turbX, turbY, turbZ).mul(params.turbStrength).mul(params.turbEnabled));
+
+    // ESCUDO (Evita el colapso total en el agujero negro)
+    const pushOut = smoothstep(1.5, 0.0, dist).mul(30.0).mul(params.gravityEnabled);
     force.addAssign(dir.mul(pushOut).mul(-1.0));
 
     // INTEGRACIÓN
     v.addAssign(force.mul(dt));
-
-    // Límite de velocidad
     const speed = v.length();
-    If(speed.greaterThan(params.maxSpeed), () => {
-      v.assign(v.normalize().mul(params.maxSpeed));
-    });
-
+    If(speed.greaterThan(params.maxSpeed), () => v.assign(v.normalize().mul(params.maxSpeed)));
     p.addAssign(v.mul(dt));
 
-    // Frontera infinita circular
-    const distFromCenter = p.length();
-    If(distFromCenter.greaterThan(params.boundsSize), () => {
-       p.assign(p.normalize().mul(params.boundsSize));
-    });
+    const half = params.boundsSize.mul(0.5);
+    p.assign(mod(p.add(half), params.boundsSize).sub(half));
   })().compute(count).setName('Update Particles');
 
-  // RENDER - FUEGO Y GALAXIA
+  // RENDER (Estilo Galaxia / Fuego)
   const material = new THREE.SpriteNodeMaterial({
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    transparent: true
+    blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
   });
 
   material.positionNode = positionBuffer.toAttribute();
   
-  // Calcular distancia al centro para el color y tamaño
   const distToCenter = positionBuffer.toAttribute().sub(params.attractor).length();
-  // Normalizar la distancia (1 = lejos, 0 = centro)
-  const distNorm = distToCenter.div(params.boundsSize).clamp(0.0, 1.0);
-  // Invertir: 1 = centro, 0 = lejos
-  const coreProximity = distNorm.oneMinus().pow(3.0); 
-
-  // Tamaño: Las del centro son gigantes, las de afuera son polvo
-  material.scaleNode = params.particleSize.mul(coreProximity.mul(4.0).add(0.5));
+  const coreProximity = distToCenter.div(params.boundsSize).clamp(0.0, 1.0).oneMinus().pow(2.0);
+  
+  material.scaleNode = params.particleSize.mul(coreProximity.mul(3.0).add(0.5));
 
   material.colorNode = Fn(() => {
-    // Paleta térmica
-    const deepBlue = color('#0A0030'); // Polvo espacial
-    const purple = color('#6A00FF');   // Nebulosa
-    const orange = color('#FF3300');   // Fuego
-    const white = color('#FFFFFF');    // Núcleo incandescente
-
-    const lowToMid = mix(deepBlue, purple, coreProximity.mul(3.0).clamp(0.0, 1.0));
-    const midToHigh = mix(lowToMid, orange, coreProximity.sub(0.33).mul(3.0).clamp(0.0, 1.0));
-    const finalRGB = mix(midToHigh, white, coreProximity.sub(0.66).mul(3.0).clamp(0.0, 1.0));
-
+    const deepBlue = color('#050022'); const purple = color('#8A00FF');
+    const orange = color('#FF3300'); const white = color('#FFFFFF');
+    const mix1 = mix(deepBlue, purple, coreProximity.mul(3.0).clamp(0.0, 1.0));
+    const mix2 = mix(mix1, orange, coreProximity.sub(0.33).mul(3.0).clamp(0.0, 1.0));
+    const finalRGB = mix(mix2, white, coreProximity.sub(0.66).mul(3.0).clamp(0.0, 1.0));
     return vec4(finalRGB, 1.0);
   })();
 
-  // Brillo en el centro (forma de estrella)
-  const distToCenterUv = uv().xy.sub(0.5).length();
-  const alpha = smoothstep(0.5, 0.0, distToCenterUv).mul(params.globalOpacity);
-  material.opacityNode = alpha;
+  material.opacityNode = smoothstep(0.5, 0.0, uv().xy.sub(0.5).length()).mul(params.globalOpacity);
 
   const geometry = new THREE.PlaneGeometry(1, 1);
   const mesh = new THREE.InstancedMesh(geometry, material, count);
   mesh.frustumCulled = false;
   scene.add(mesh);
 
-  function reset() { renderer.compute(initParticles); }
-  function stepSimulation() { renderer.compute(updateParticles); }
-  function dispose() {
-    geometry.dispose();
-    material.dispose();
-    scene.remove(mesh);
-  }
-
-  return { count, positionBuffer, velocityBuffer, reset, stepSimulation, dispose };
+  return { 
+    count, positionBuffer, velocityBuffer, 
+    reset: () => renderer.compute(initParticles), 
+    stepSimulation: () => renderer.compute(updateParticles), 
+    dispose: () => { geometry.dispose(); material.dispose(); scene.remove(mesh); } 
+  };
 }
