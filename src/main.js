@@ -129,21 +129,18 @@ async function main() {
   function updatePerformance() {
     if (mode !== 'PERFORMANCE') return;
 
-    // Muelle (W/S)
     let springTarget = 3.0;
     if (keys.KeyW && !keys.KeyS) springTarget = 10.0;
     else if (keys.KeyS && !keys.KeyW) springTarget = 0.0;
     params.springEnabled.value = 1;
     params.springStrength.value += (springTarget - params.springStrength.value) * 0.1;
 
-    // Turbulencia (A/D)
     let turbTarget = 1.5;
     if (keys.KeyA && !keys.KeyD) turbTarget = 8.0;
     else if (keys.KeyD && !keys.KeyA) turbTarget = 0.0;
     params.turbEnabled.value = 1;
     params.turbStrength.value += (turbTarget - params.turbStrength.value) * 0.1;
 
-    // Drag (Q/E)
     let dragTarget = 0.1;
     if (keys.KeyQ && !keys.KeyE) dragTarget = 0.5;
     else if (keys.KeyE && !keys.KeyQ) dragTarget = 0.01;
@@ -189,22 +186,33 @@ async function main() {
 
   setMode('LAB');
 
+  // 🔥 AQUÍ ESTÁ EL CAMBIO CLAVE: Quitamos la restricción mode === 'LAB'
   addEventListener('keydown', (event) => {
+    // Previene que el navegador haga scroll si usas flechas o espacio
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
+      event.preventDefault();
+    }
+
     if (event.code in keys) {
       keys[event.code] = true;
-      event.preventDefault();
       return;
     }
+
+    // Cambio de modo
     if (event.code === 'KeyP') {
       setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB');
       if (mode === 'PERFORMANCE') setPerformanceNeutral();
       return;
     }
+
+    // Reset
     if (event.code === 'KeyR') {
-      applyPreset('inertia');
+      applyPreset(mode === 'LAB' ? 'inertia' : 'chaos');
       return;
     }
-    if (mode === 'LAB' && !event.repeat) {
+
+    // Números para las pruebas (funcionan SIEMPRE, estés en LAB o PERFORMANCE)
+    if (!event.repeat) {
       if (event.code === 'Digit1') applyPreset('inertia');
       if (event.code === 'Digit2') applyPreset('spring');
       if (event.code === 'Digit3') applyPreset('turb');
@@ -215,7 +223,6 @@ async function main() {
   addEventListener('keyup', (event) => {
     if (event.code in keys) {
       keys[event.code] = false;
-      event.preventDefault();
     }
   });
 
@@ -224,6 +231,9 @@ async function main() {
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
+
+  // Aseguramos que la ventana tenga el foco para capturar las teclas
+  window.focus();
 
   simulation.reset();
 
