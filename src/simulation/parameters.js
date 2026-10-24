@@ -8,26 +8,21 @@ export function createParameters() {
     initialSpeed: uniform(0.35),
     maxSpeed: uniform(6.0),
     boundsSize: uniform(10.0),
-    particleSize: uniform(0.035),
+    particleSize: uniform(0.04), // Un poco más grandes para ver el efecto
+    globalOpacity: uniform(1.0),
 
-    windEnabled: uniform(0.0),
-    wind: uniform(new THREE.Vector3(0.0, 0.0, 0.0)),
-
-    radialEnabled: uniform(1.0),
+    // Fuerza 1: Muelle (Spring)
+    springEnabled: uniform(0.0),
+    springStrength: uniform(4.0),
     attractor: uniform(new THREE.Vector3(0.0, 0.0, 0.0)),
-    radialStrength: uniform(2.2),
-    softening: uniform(0.35),
+    softening: uniform(0.5),
 
-    vortexEnabled: uniform(1.0),
-    vortexStrength: uniform(1.4),
+    // Fuerza 2: Turbulencia (Ondas trigonométricas)
+    turbEnabled: uniform(0.0),
+    turbStrength: uniform(2.5),
 
+    // Drag
     dragEnabled: uniform(1.0),
-    dragCoefficient: uniform(0.12),
-
-    spiralEnabled: uniform(0.0),
-    spiralStrength: uniform(1.6),
-    spiralDirection: uniform(1.0),
-
-    globalOpacity: uniform(1.0)
+    dragCoefficient: uniform(0.15)
   };
 }

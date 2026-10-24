@@ -13,7 +13,10 @@ import {
   uint,
   uv,
   vec3,
-  vec4
+  vec4,
+  sin,
+  cos,
+  time
 } from 'three/tsl';
 
 export function createSimulation({ renderer, scene, params, count = 131072 }) {
@@ -32,7 +35,7 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const r5 = hash(i.add(uint(71)));
     const r6 = hash(i.add(uint(89)));
 
-    p.assign(vec3(r1, r2, r3).sub(0.5).mul(params.boundsSize.mul(0.45)));
+    p.assign(vec3(r1, r2, r3).sub(0.5).mul(params.boundsSize.mul(0.6)));
     v.assign(vec3(r4, r5, r6).sub(0.5).mul(params.initialSpeed));
   })().compute(count).setName('Initialize Particles');
 
@@ -43,30 +46,26 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const dt = params.dt.mul(params.timeScale);
     const force = vec3(0.0).toVar();
 
-    force.addAssign(params.wind.mul(params.windEnabled));
+    // 1) FUERZA ELÁSTICA (Muelle hacia el ratón)
+    // F = -k * (p - attractor)
+    const distVec = p.sub(params.attractor);
+    const dist = max(distVec.length(), params.softening);
+    const springDir = distVec.div(dist);
+    const springForce = springDir.mul(dist).mul(params.springStrength).mul(params.springEnabled).mul(-1.0);
+    force.addAssign(springForce);
 
-    const toAttractor = params.attractor.sub(p);
-    const distance = max(toAttractor.length(), params.softening);
-    const radialDirection = toAttractor.div(distance);
-    const radialForce = radialDirection
-      .mul(params.radialStrength)
-      .div(distance.pow(2))
-      .mul(params.radialEnabled);
-    force.addAssign(radialForce);
+    // 2) TURBULENCIA CÓSMICA (Ondas senoidales basadas en la posición y el tiempo)
+    const t = time.mul(0.5);
+    const turbX = sin(p.y.mul(1.5).add(t)).mul(cos(p.z.mul(1.2).add(t)));
+    const turbY = sin(p.z.mul(1.5).add(t)).mul(cos(p.x.mul(1.2).add(t)));
+    const turbZ = sin(p.x.mul(1.5).add(t)).mul(cos(p.y.mul(1.2).add(t)));
+    const turbForce = vec3(turbX, turbY, turbZ).mul(params.turbStrength).mul(params.turbEnabled);
+    force.addAssign(turbForce);
 
-    const zAxis = vec3(0.0, 0.0, 1.0);
-    const tangent = zAxis.cross(radialDirection);
-    force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
-
+    // 3) DRAG
     force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
 
-    const spiralForce = tangent
-      .div(distance)
-      .mul(params.spiralStrength)
-      .mul(params.spiralDirection)
-      .mul(params.spiralEnabled);
-    force.addAssign(spiralForce);
-
+    // INTEGRACIÓN
     v.addAssign(force.mul(dt));
 
     const speed = v.length();
@@ -89,16 +88,18 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
   material.positionNode = positionBuffer.toAttribute();
   material.scaleNode = params.particleSize;
 
+  // NUEVA PALETA DE COLORES (Neón / Térmico)
   material.colorNode = Fn(() => {
     const speed = velocityBuffer.toAttribute().length();
     const t = speed.div(params.maxSpeed).clamp(0.0, 1.0);
 
-    const cobaltBlue = color('#0047ab');
-    const purple = color('#7a1fa0');
-    const crimsonRed = color('#d12e2e');
+    // Azul profundo (lento) -> Magenta (medio) -> Amarillo brillante (rápido)
+    const deepBlue = color('#130CB7');
+    const magenta = color('#F50C86');
+    const yellow = color('#FFF323');
 
-    const lowToMid = mix(cobaltBlue, purple, t.mul(2.0).clamp(0.0, 1.0));
-    const midToHigh = mix(purple, crimsonRed, t.sub(0.5).mul(2.0).clamp(0.0, 1.0));
+    const lowToMid = mix(deepBlue, magenta, t.mul(2.0).clamp(0.0, 1.0));
+    const midToHigh = mix(magenta, yellow, t.sub(0.5).mul(2.0).clamp(0.0, 1.0));
     const finalRGB = mix(lowToMid, midToHigh, step(0.5, t));
 
     return vec4(finalRGB, 1.0);
