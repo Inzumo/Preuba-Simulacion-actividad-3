@@ -32,28 +32,6 @@ function rangeRow(parent, label, param, min, max, step) {
   return { input, refresh };
 }
 
-function checkRow(parent, label, param) {
-  const wrap = document.createElement('div');
-  wrap.className = 'row';
-  const lab = document.createElement('label');
-  const name = document.createElement('span');
-  name.textContent = label;
-  const input = document.createElement('input');
-  input.type = 'checkbox';
-  input.checked = param.value > 0;
-
-  input.addEventListener('change', () => {
-    param.value = input.checked ? 1 : 0;
-  });
-
-  const refresh = () => { input.checked = param.value > 0; };
-
-  lab.append(name, input);
-  wrap.append(lab);
-  parent.append(wrap);
-  return { input, refresh };
-}
-
 function button(parent, label, onClick) {
   const b = document.createElement('button');
   b.textContent = label;
@@ -67,47 +45,29 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
   const panel = document.createElement('aside');
   panel.className = 'panel';
   panel.innerHTML = `
-    <h1>U3 · Cosmic Instrument</h1>
-    <p>LAB: aísla fuerzas. <strong>P</strong> cambia a PERFORMANCE.</p>
+    <h1>🔥 Singularity Engine</h1>
+    <p>Atrae la materia. <strong>P</strong> cambia a PERFORMANCE.</p>
   `;
 
   const sim = document.createElement('div');
   sim.className = 'group';
-  sim.innerHTML = '<h2>Simulación</h2>';
+  sim.innerHTML = '<h2>Gravedad</h2>';
   panel.append(sim);
-  refreshers.push(rangeRow(sim, 'timeScale', params.timeScale, 0, 2, 0.01));
-  refreshers.push(rangeRow(sim, 'maxSpeed', params.maxSpeed, 0.2, 12, 0.1));
-  refreshers.push(rangeRow(sim, 'particleSize', params.particleSize, 0.005, 0.15, 0.001));
+  refreshers.push(rangeRow(sim, 'Fuerza Gravedad', params.gravityStrength, 0, 20, 0.1));
+  refreshers.push(rangeRow(sim, 'Fuerza Torbellino', params.swirlStrength, 0, 10, 0.1));
+  refreshers.push(rangeRow(sim, 'Horizonte de Sucesos', params.eventHorizon, 0.1, 5.0, 0.1));
 
-  const force = document.createElement('div');
-  force.className = 'group';
-  force.innerHTML = '<h2>Fuerzas</h2>';
-  panel.append(force);
-
-  refreshers.push(checkRow(force, 'Fuerza Elástica (Muelle)', params.springEnabled));
-  refreshers.push(rangeRow(force, 'Intensidad Muelle', params.springStrength, 0, 10, 0.1));
-  refreshers.push(checkRow(force, 'Turbulencia Cósmica', params.turbEnabled));
-  refreshers.push(rangeRow(force, 'Intensidad Turbulencia', params.turbStrength, 0, 8, 0.1));
-  refreshers.push(checkRow(force, 'Drag (Fricción)', params.dragEnabled));
-  refreshers.push(rangeRow(force, 'Coef. rozamiento', params.dragCoefficient, 0, 1, 0.01));
-
-  const tests = document.createElement('div');
-  tests.className = 'group';
-  tests.innerHTML = '<h2>Pruebas</h2><p>Predice antes de pulsar.</p>';
-  panel.append(tests);
-  for (const [id, label] of [
-    ['inertia', '1 · Inercia pura'],
-    ['spring', '2 · Atracción Elástica'],
-    ['turb', '3 · Turbulencia'],
-    ['chaos', '4 · Caos (Ambas)']
-  ]) button(tests, label, () => onPreset(id));
+  const vis = document.createElement('div');
+  vis.className = 'group';
+  vis.innerHTML = '<h2>Visuales</h2>';
+  panel.append(vis);
+  refreshers.push(rangeRow(vis, 'Tamaño Núcleo', params.particleSize, 0.01, 0.2, 0.001));
 
   const actions = document.createElement('div');
   actions.className = 'group';
   actions.innerHTML = '<h2>Acciones</h2>';
   panel.append(actions);
-  button(actions, 'Reset', onReset);
-  button(actions, 'Pausar / continuar', () => onPauseChange());
+  button(actions, 'Reiniciar Materia', onReset);
   button(actions, 'LAB / PERFORMANCE', () => onModeChange());
 
   document.body.append(panel);
