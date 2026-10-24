@@ -14,7 +14,7 @@ async function main() {
 
   const scene = new THREE.Scene(); scene.background = new THREE.Color('#020005');
   const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.05, 100);
-  camera.position.set(0, 0, 25); camera.lookAt(0, 0, 0);
+  camera.position.set(0, 0, 30); camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGPURenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -30,30 +30,45 @@ async function main() {
   let paused = false, mode = 'LAB', panel;
   const hud = document.createElement('div'); hud.className = 'hud'; document.body.append(hud);
 
+  // --- LAB: Nuevas Fuerzas ---
   const applyPreset = (id) => {
-    params.vortexEnabled.value = 0; params.pulseEnabled.value = 0; params.turbEnabled.value = 0;
-
-    if (id === '1') { params.vortexEnabled.value = 1; }
-    else if (id === '2') { params.vortexEnabled.value = 1; params.pulseEnabled.value = 1; params.pulseStrength.value = 2.0; }
-    else if (id === '3') { params.vortexEnabled.value = 1; params.turbEnabled.value = 1; params.turbStrength.value = 4.0; }
-    else if (id === '4') { params.vortexEnabled.value = 1; params.pulseEnabled.value = 1; params.pulseStrength.value = 2.0; params.turbEnabled.value = 1; params.turbStrength.value = 4.0; }
+    params.tensionEnabled.value = 1;
+    params.bubbleEnabled.value = 1;
+    params.fluidEnabled.value = 0;
+    
+    if (id === '1') {
+      params.tensionStrength.value = 15.0;
+      params.bubbleStrength.value = 5.0;
+    } else if (id === '2') {
+      params.tensionStrength.value = 2.0;
+      params.bubbleStrength.value = 25.0;
+    } else if (id === '3') {
+      params.tensionStrength.value = 8.0;
+      params.fluidEnabled.value = 1;
+      params.fluidStrength.value = 6.0;
+    } else if (id === '4') {
+      params.tensionStrength.value = 20.0;
+      params.bubbleStrength.value = 15.0;
+      params.fluidEnabled.value = 1;
+      params.fluidStrength.value = 10.0;
+    }
     simulation.reset();
   };
 
   const setMode = (next) => {
     mode = next; const lab = mode === 'LAB';
     panel.setVisible(lab);
-    hud.innerHTML = lab ? '<strong>LAB</strong> · 1-4 Pruebas · P: PERFORMANCE' 
-      : `<strong>NOVA PLASMA PERFORMANCE</strong><br>
-         Mouse: Mover núcleo · A/D: Fuerza Vórtice<br>
-         Q/E: Turbulencia · <b>1-4: Golpes de Fuerza</b><br>
-         R: Reset · P: LAB`;
+    hud.innerHTML = lab ? '<strong>LAB</strong> · 1-4 Fuerzas · P: PERFORMANCE' 
+      : `<strong>COLAPSO ESTELAR</strong><br>
+         A/D: Tensión · Q/E: Fluidos<br>
+         <b>1-4: Detonadores (Golpes)</b><br>
+         R: Reiniciar · P: LAB`;
   };
 
   panel = createLabPanel({ params, onReset: () => simulation.reset(), onPreset: applyPreset, onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB') });
   setMode('LAB');
 
-  // Mover el núcleo (pero NO la iluminación)
+  // El centro se mueve solo (o con el mouse)
   const pointerNdc = new THREE.Vector2(); const raycaster = new THREE.Raycaster();
   const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); const hit = new THREE.Vector3();
   addEventListener('pointermove', (e) => {
@@ -67,37 +82,35 @@ async function main() {
   function updatePerformance() {
     if (mode !== 'PERFORMANCE') return;
     
-    // A/D: Vórtice
-    let vt = 15.0; if (keys.KeyA) vt = 40.0; else if (keys.KeyD) vt = 0.0;
-    params.vortexStrength.value += (vt - params.vortexStrength.value) * 0.1; params.vortexEnabled.value = 1;
+    // A/D: Tensión (Atracción)
+    let tt = 12.0; if (keys.KeyA) tt = 40.0; else if (keys.KeyD) tt = 0.0;
+    params.tensionStrength.value += (tt - params.tensionStrength.value) * 0.1; params.tensionEnabled.value = 1;
 
-    // Q/E: Turbulencia
-    let tt = 0.0; if (keys.KeyQ) tt = 10.0; else if (keys.KeyE) tt = 0.0;
-    params.turbStrength.value += (tt - params.turbStrength.value) * 0.1; params.turbEnabled.value = 1;
+    // Q/E: Fluidos (Caos)
+    let ft = 0.0; if (keys.KeyQ) ft = 15.0; else if (keys.KeyE) ft = 0.0;
+    params.fluidStrength.value += (ft - params.fluidStrength.value) * 0.1; params.fluidEnabled.value = 1;
   }
 
   function triggerForceStrike(id) {
     if (id === '1') {
-      // 1: Pulso de Resonancia (Onda expansiva)
-      params.pulseEnabled.value = 1;
-      params.pulseStrength.value = 8.0;
-      setTimeout(() => params.pulseStrength.value = 0.0, 300);
+      // 1: Onda de Choque (Burbuja Explosiva)
+      params.bubbleStrength.value = 60.0;
+      setTimeout(() => params.bubbleStrength.value = 8.0, 250);
     } else if (id === '2') {
-      // 2: Explosión de Turbulencia
-      params.turbEnabled.value = 1;
-      params.turbStrength.value = 30.0;
-      setTimeout(() => params.turbStrength.value = 4.0, 400);
+      // 2: Súper Atracción (Latigazo al centro)
+      params.tensionStrength.value = 80.0;
+      setTimeout(() => params.tensionStrength.value = 12.0, 300);
     } else if (id === '3') {
-      // 3: Acelerón de Vórtice (Latigazo)
-      params.vortexStrength.value = 80.0;
-      setTimeout(() => params.vortexStrength.value = 15.0, 200);
+      // 3: Terremoto de Fluidos
+      params.fluidStrength.value = 40.0;
+      params.fluidEnabled.value = 1;
+      setTimeout(() => params.fluidStrength.value = 5.0, 500);
     } else if (id === '4') {
-      // 4: Caos Total
-      params.vortexStrength.value = 50.0;
-      params.pulseStrength.value = 10.0;
-      params.turbStrength.value = 20.0;
-      params.pulseEnabled.value = 1; params.turbEnabled.value = 1;
-      setTimeout(() => { params.vortexStrength.value = 15.0; params.pulseStrength.value = 0; params.turbStrength.value = 0; }, 300);
+      // 4: Big Bang
+      params.bubbleStrength.value = 100.0;
+      params.tensionStrength.value = 0.0;
+      params.fluidStrength.value = 50.0;
+      setTimeout(() => { params.bubbleStrength.value = 8.0; params.tensionStrength.value = 12.0; params.fluidStrength.value = 5.0; }, 400);
     }
   }
 

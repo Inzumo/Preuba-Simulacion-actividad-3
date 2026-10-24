@@ -5,26 +5,24 @@ export function createParameters() {
   return {
     dt: uniform(1 / 60),
     timeScale: uniform(1.0),
-    initialSpeed: uniform(2.0),
-    maxSpeed: uniform(12.0),
-    boundsSize: uniform(20.0),
-    particleSize: uniform(0.03),
+    maxSpeed: uniform(15.0),
+    boundsSize: uniform(25.0), // Espacio más grande
+    particleSize: uniform(0.04),
     globalOpacity: uniform(1.0),
 
-    // NUEVAS FUERZAS (Nada del profe)
-    // 1. Fuerza de Vórtice Central (Remolino gravitacional)
-    vortexEnabled: uniform(1.0),
-    vortexStrength: uniform(15.0),
+    // 1. TENSIÓN MAGNÉTICA (Atracción asimétrica)
+    tensionEnabled: uniform(1.0),
+    tensionStrength: uniform(12.0),
+    
+    // 2. FUERZA DE BURBUJA (Empuje desde el centro)
+    bubbleEnabled: uniform(1.0),
+    bubbleStrength: uniform(8.0),
 
-    // 2. Fuerza de Resonancia (Ondas de choque que empujan desde el centro)
-    pulseEnabled: uniform(0.0),
-    pulseStrength: uniform(0.0),
+    // 3. TURBULENCIA DE FLUIDOS
+    fluidEnabled: uniform(0.0),
+    fluidStrength: uniform(5.0),
 
-    // 3. Fuerza de Turbulencia Magnética
-    turbEnabled: uniform(0.0),
-    turbStrength: uniform(4.0),
-
-    // Atractor (El núcleo de la estrella de neutrones)
+    // Centro del colapso
     attractor: uniform(new THREE.Vector3(0.0, 0.0, 0.0))
   };
 }

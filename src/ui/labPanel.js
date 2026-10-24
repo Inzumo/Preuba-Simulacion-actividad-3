@@ -5,16 +5,16 @@ function button(parent, label, onClick) {
 
 export function createLabPanel({ params, onReset, onPreset, onModeChange }) {
   const panel = document.createElement('aside'); panel.className = 'panel';
-  panel.innerHTML = `<h1>🔬 LAB · Verificación Nova</h1><p>Prueba la nueva física. Pasa a <strong>P</strong> para tocar.</p>`;
+  panel.innerHTML = `<h1>⚡ Colapso Estelar</h1><p>LAB de pruebas. <strong>P</strong> para interpretar.</p>`;
 
   const tests = document.createElement('div'); tests.className = 'group';
   tests.innerHTML = '<h2>Fuerzas</h2>';
   panel.append(tests);
   for (const [id, label] of [
-    ['1', '1 · Vórtice Base'], 
-    ['2', '2 · Ondas de Resonancia'], 
-    ['3', '3 · Turbulencia Magnética'], 
-    ['4', '4 · Tormenta Total']
+    ['1', '1 · Tensión Magnética'], 
+    ['2', '2 · Burbuja de Repulsión'], 
+    ['3', '3 · Turbulencia de Fluidos'], 
+    ['4', '4 · Colapso Total']
   ]) button(tests, label, () => onPreset(id));
 
   const actions = document.createElement('div'); actions.className = 'group';
