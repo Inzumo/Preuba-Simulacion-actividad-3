@@ -8,7 +8,7 @@ export function createParameters() {
     initialSpeed: uniform(0.35),
     maxSpeed: uniform(6.0),
     boundsSize: uniform(10.0),
-    particleSize: uniform(0.04), // Un poco más grandes para ver el efecto
+    particleSize: uniform(0.04),
     globalOpacity: uniform(1.0),
 
     // Fuerza 1: Muelle (Spring)

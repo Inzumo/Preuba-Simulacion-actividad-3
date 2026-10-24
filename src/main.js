@@ -92,7 +92,7 @@ async function main() {
     }
   }
 
-  function applyPreset(id) {
+  function applyPreset(id, doReset = false) {
     const myId = ++transitionId;
     const startOpacity = params.globalOpacity.value;
     const t0 = performance.now();
@@ -105,7 +105,10 @@ async function main() {
       if (t < 1) requestAnimationFrame(fadeOut);
       else {
         applyPresetValues(id);
-        simulation.reset();
+        
+        // 🔥 SI DO RESET ES TRUE, REINICIA LAS PARTÍCULAS
+        if (doReset) simulation.reset(); 
+        
         const t1 = performance.now();
         const fadeIn = () => {
           if (myId !== transitionId) return;
@@ -178,17 +181,15 @@ async function main() {
 
   panel = createLabPanel({
     params,
-    onReset: () => applyPreset('inertia'),
-    onPreset: applyPreset,
+    onReset: () => applyPreset('inertia', true), // Botón reset del panel SÍ reinicia
+    onPreset: (id) => applyPreset(id, false),    // Botones de prueba NO reinician
     onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB'),
     onPauseChange: () => (paused = !paused)
   });
 
   setMode('LAB');
 
-  // 🔥 AQUÍ ESTÁ EL CAMBIO CLAVE: Quitamos la restricción mode === 'LAB'
   addEventListener('keydown', (event) => {
-    // Previene que el navegador haga scroll si usas flechas o espacio
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code)) {
       event.preventDefault();
     }
@@ -198,25 +199,23 @@ async function main() {
       return;
     }
 
-    // Cambio de modo
     if (event.code === 'KeyP') {
       setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB');
       if (mode === 'PERFORMANCE') setPerformanceNeutral();
       return;
     }
 
-    // Reset
     if (event.code === 'KeyR') {
-      applyPreset(mode === 'LAB' ? 'inertia' : 'chaos');
+      applyPreset('inertia', true); // R sí reinicia
       return;
     }
 
-    // Números para las pruebas (funcionan SIEMPRE, estés en LAB o PERFORMANCE)
+    // Números funcionan SIEMPRE, sin reiniciar
     if (!event.repeat) {
-      if (event.code === 'Digit1') applyPreset('inertia');
-      if (event.code === 'Digit2') applyPreset('spring');
-      if (event.code === 'Digit3') applyPreset('turb');
-      if (event.code === 'Digit4') applyPreset('chaos');
+      if (event.code === 'Digit1') applyPreset('inertia', false);
+      if (event.code === 'Digit2') applyPreset('spring', false);
+      if (event.code === 'Digit3') applyPreset('turb', false);
+      if (event.code === 'Digit4') applyPreset('chaos', false);
     }
   });
 
@@ -232,9 +231,7 @@ async function main() {
     renderer.setSize(innerWidth, innerHeight);
   });
 
-  // Aseguramos que la ventana tenga el foco para capturar las teclas
   window.focus();
-
   simulation.reset();
 
   renderer.setAnimationLoop(() => {

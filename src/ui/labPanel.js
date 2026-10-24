@@ -68,7 +68,7 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
   panel.className = 'panel';
   panel.innerHTML = `
     <h1>U3 · Cosmic Instrument</h1>
-    <p>LAB: aísla fuerzas, predice y prueba. <strong>P</strong> cambia a PERFORMANCE.</p>
+    <p>LAB: aísla fuerzas. <strong>P</strong> cambia a PERFORMANCE.</p>
   `;
 
   const sim = document.createElement('div');
@@ -77,7 +77,7 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
   panel.append(sim);
   refreshers.push(rangeRow(sim, 'timeScale', params.timeScale, 0, 2, 0.01));
   refreshers.push(rangeRow(sim, 'maxSpeed', params.maxSpeed, 0.2, 12, 0.1));
-  refreshers.push(rangeRow(sim, 'particleSize', params.particleSize, 0.005, 0.1, 0.001));
+  refreshers.push(rangeRow(sim, 'particleSize', params.particleSize, 0.005, 0.15, 0.001));
 
   const force = document.createElement('div');
   force.className = 'group';
@@ -86,10 +86,8 @@ export function createLabPanel({ params, onReset, onPreset, onModeChange, onPaus
 
   refreshers.push(checkRow(force, 'Fuerza Elástica (Muelle)', params.springEnabled));
   refreshers.push(rangeRow(force, 'Intensidad Muelle', params.springStrength, 0, 10, 0.1));
-  
   refreshers.push(checkRow(force, 'Turbulencia Cósmica', params.turbEnabled));
   refreshers.push(rangeRow(force, 'Intensidad Turbulencia', params.turbStrength, 0, 8, 0.1));
-
   refreshers.push(checkRow(force, 'Drag (Fricción)', params.dragEnabled));
   refreshers.push(rangeRow(force, 'Coef. rozamiento', params.dragCoefficient, 0, 1, 0.01));
 

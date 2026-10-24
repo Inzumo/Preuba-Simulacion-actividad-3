@@ -16,7 +16,8 @@ import {
   vec4,
   sin,
   cos,
-  time
+  time,
+  smoothstep
 } from 'three/tsl';
 
 export function createSimulation({ renderer, scene, params, count = 131072 }) {
@@ -46,15 +47,14 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const dt = params.dt.mul(params.timeScale);
     const force = vec3(0.0).toVar();
 
-    // 1) FUERZA ELÁSTICA (Muelle hacia el ratón)
-    // F = -k * (p - attractor)
+    // 1) FUERZA ELÁSTICA (Muelle)
     const distVec = p.sub(params.attractor);
     const dist = max(distVec.length(), params.softening);
     const springDir = distVec.div(dist);
     const springForce = springDir.mul(dist).mul(params.springStrength).mul(params.springEnabled).mul(-1.0);
     force.addAssign(springForce);
 
-    // 2) TURBULENCIA CÓSMICA (Ondas senoidales basadas en la posición y el tiempo)
+    // 2) TURBULENCIA CÓSMICA
     const t = time.mul(0.5);
     const turbX = sin(p.y.mul(1.5).add(t)).mul(cos(p.z.mul(1.2).add(t)));
     const turbY = sin(p.z.mul(1.5).add(t)).mul(cos(p.x.mul(1.2).add(t)));
@@ -79,6 +79,7 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     p.assign(mod(p.add(half), params.boundsSize).sub(half));
   })().compute(count).setName('Update Particles');
 
+  // RENDER VISUAL IMPACTANTE
   const material = new THREE.SpriteNodeMaterial({
     blending: THREE.AdditiveBlending,
     depthWrite: false,
@@ -86,17 +87,18 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
   });
 
   material.positionNode = positionBuffer.toAttribute();
-  material.scaleNode = params.particleSize;
+  
+  const speedAttr = velocityBuffer.toAttribute().length();
+  const speedNorm = speedAttr.div(params.maxSpeed).clamp(0.0, 1.0);
+  
+  // El tamaño reacciona a la velocidad
+  material.scaleNode = params.particleSize.mul(speedNorm.mul(2.0).add(1.0));
 
-  // NUEVA PALETA DE COLORES (Neón / Térmico)
   material.colorNode = Fn(() => {
-    const speed = velocityBuffer.toAttribute().length();
-    const t = speed.div(params.maxSpeed).clamp(0.0, 1.0);
-
-    // Azul profundo (lento) -> Magenta (medio) -> Amarillo brillante (rápido)
-    const deepBlue = color('#130CB7');
-    const magenta = color('#F50C86');
-    const yellow = color('#FFF323');
+    const t = speedNorm;
+    const deepBlue = color('#00E5FF'); // Cyan
+    const magenta = color('#FF00FF');  // Magenta
+    const yellow = color('#FFEA00');   // Amarillo
 
     const lowToMid = mix(deepBlue, magenta, t.mul(2.0).clamp(0.0, 1.0));
     const midToHigh = mix(magenta, yellow, t.sub(0.5).mul(2.0).clamp(0.0, 1.0));
@@ -105,31 +107,23 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     return vec4(finalRGB, 1.0);
   })();
 
-  material.opacityNode = step(uv().xy.sub(0.5).length(), 0.5).mul(params.globalOpacity);
+  // Núcleo brillante (borde suave)
+  const distToCenter = uv().xy.sub(0.5).length();
+  const alpha = smoothstep(0.5, 0.1, distToCenter).mul(params.globalOpacity);
+  material.opacityNode = alpha;
 
   const geometry = new THREE.PlaneGeometry(1, 1);
   const mesh = new THREE.InstancedMesh(geometry, material, count);
   mesh.frustumCulled = false;
   scene.add(mesh);
 
-  function reset() {
-    renderer.compute(initParticles);
-  }
-  function stepSimulation() {
-    renderer.compute(updateParticles);
-  }
+  function reset() { renderer.compute(initParticles); }
+  function stepSimulation() { renderer.compute(updateParticles); }
   function dispose() {
     geometry.dispose();
     material.dispose();
     scene.remove(mesh);
   }
 
-  return {
-    count,
-    positionBuffer,
-    velocityBuffer,
-    reset,
-    stepSimulation,
-    dispose
-  };
+  return { count, positionBuffer, velocityBuffer, reset, stepSimulation, dispose };
 }
