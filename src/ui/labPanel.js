@@ -1,34 +1,9 @@
-function rangeRow(parent, label, param, min, max, step) {
-  const wrap = document.createElement('div'); wrap.className = 'row';
-  const lab = document.createElement('label'); const name = document.createElement('span');
-  const value = document.createElement('span'); value.className = 'value';
-  name.textContent = label; lab.append(name, value);
-  const input = document.createElement('input');
-  input.type = 'range'; input.min = String(min); input.max = String(max);
-  input.step = String(step); input.value = String(param.value);
-  const onInput = () => { param.value = Number(input.value); value.textContent = Number(input.value).toFixed(2); };
-  input.addEventListener('input', onInput);
-  const refresh = () => { input.value = String(param.value); value.textContent = Number(param.value).toFixed(2); };
-  refresh(); wrap.append(lab, input); parent.append(wrap); return { input, refresh };
-}
-
-function checkRow(parent, label, param) {
-  const wrap = document.createElement('div'); wrap.className = 'row';
-  const lab = document.createElement('label'); const name = document.createElement('span');
-  name.textContent = label; const input = document.createElement('input');
-  input.type = 'checkbox'; input.checked = param.value > 0;
-  input.addEventListener('change', () => { param.value = input.checked ? 1 : 0; });
-  const refresh = () => { input.checked = param.value > 0; };
-  lab.append(name, input); wrap.append(lab); parent.append(wrap); return { input, refresh };
-}
-
 function button(parent, label, onClick) {
   const b = document.createElement('button'); b.textContent = label;
   b.addEventListener('click', onClick); parent.append(b); return b;
 }
 
 export function createLabPanel({ params, onReset, onPreset, onModeChange }) {
-  const refreshers = [];
   const panel = document.createElement('aside'); panel.className = 'panel';
   panel.innerHTML = `<h1>🧪 LAB · Verificación</h1><p>Prueba las fuerzas. Pasa a <strong>P</strong> para interpretar.</p>`;
 

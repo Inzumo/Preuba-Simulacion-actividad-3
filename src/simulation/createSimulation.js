@@ -37,35 +37,28 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const zAxis = vec3(0.0, 0.0, 1.0);
     const tangent = zAxis.cross(dir);
 
-    // 1) VIENTO
     force.addAssign(params.wind.mul(params.windEnabled));
 
-    // 2) RADIAL
     const radialForce = dir.mul(params.radialStrength).div(dist.pow(2)).mul(params.radialEnabled);
     force.addAssign(radialForce);
 
-    // 3) VÓRTICE
     force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
 
-    // 4) DRAG
     force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
 
-    // 5) GRAVEDAD AGUJERO NEGRO (Fuerza propia)
     const blackHoleForce = dir.mul(params.gravityStrength).div(dist.mul(0.5).add(1.0)).mul(params.gravityEnabled);
     force.addAssign(blackHoleForce);
 
-    // 6) TURBULENCIA CÓSMICA (Fuerza propia)
     const t = time.mul(1.5);
     const turbX = sin(p.y.mul(2.0).add(t)).mul(cos(p.z.mul(2.0).add(t)));
     const turbY = sin(p.z.mul(2.0).add(t)).mul(cos(p.x.mul(2.0).add(t)));
     const turbZ = sin(p.x.mul(2.0).add(t)).mul(cos(p.y.mul(2.0).add(t)));
     force.addAssign(vec3(turbX, turbY, turbZ).mul(params.turbStrength).mul(params.turbEnabled));
 
-    // ESCUDO (Evita el colapso total en el agujero negro)
+    // Escudo anti-colapso
     const pushOut = smoothstep(1.5, 0.0, dist).mul(30.0).mul(params.gravityEnabled);
     force.addAssign(dir.mul(pushOut).mul(-1.0));
 
-    // INTEGRACIÓN
     v.addAssign(force.mul(dt));
     const speed = v.length();
     If(speed.greaterThan(params.maxSpeed), () => v.assign(v.normalize().mul(params.maxSpeed)));
@@ -75,7 +68,6 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     p.assign(mod(p.add(half), params.boundsSize).sub(half));
   })().compute(count).setName('Update Particles');
 
-  // RENDER (Estilo Galaxia / Fuego)
   const material = new THREE.SpriteNodeMaterial({
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
   });
