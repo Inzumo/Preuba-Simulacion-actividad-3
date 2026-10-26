@@ -1,11 +1,11 @@
 export function createLabPanel({ params, onReset, onPreset, onModeChange }) {
   const panel = document.createElement('aside'); panel.className = 'panel';
   panel.innerHTML = `
-    <h1>🧪 LAB · Verificación</h1>
-    <p>Prueba las 5 fuerzas base. <strong>P</strong> para interpretar.</p>
+    <h1 style="color: #00FFFF;">🔥 VERSIÓN NUEVA (Neón)</h1>
+    <p>Prueba las 5 fuerzas base. <strong>P</strong> para tocar.</p>
     <div class="group"><h2>5 Fuerzas Base</h2>
       <button id="b1">1 · Inercia</button>
-      <button id="b2">2 · Viento (Fuerza +X)</button>
+      <button id="b2">2 · Viento</button>
       <button id="b3">3 · Atracción</button>
       <button id="b4">4 · Repulsión</button>
       <button id="b5">5 · Vórtice</button>

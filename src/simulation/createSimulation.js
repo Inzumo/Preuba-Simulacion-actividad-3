@@ -20,8 +20,8 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const r5 = hash(i.add(uint(71)));
     const r6 = hash(i.add(uint(89)));
 
-    // Partículas más esparcidas por toda la pantalla
-    p.assign(vec3(r1, r2, r3).sub(0.5).mul(params.boundsSize.mul(1.2)));
+    // Nacen por toda la pantalla
+    p.assign(vec3(r1, r2, r3).sub(0.5).mul(params.boundsSize.mul(1.3)));
     v.assign(vec3(r4, r5, r6).sub(0.5).mul(params.initialSpeed));
   })().compute(count).setName('Initialize Particles');
 
@@ -40,17 +40,13 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
 
     // 1. VIENTO
     force.addAssign(vec3(1.0, 0.0, 0.0).mul(params.windStrength).mul(params.windEnabled));
-
     // 2. RADIAL
     force.addAssign(dir.mul(params.radialStrength).div(dist.mul(0.5).add(1.0)).mul(params.radialEnabled));
-
     // 3. VÓRTICE
     force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
-
     // 4. DRAG
     force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
 
-    // INTEGRACIÓN
     v.addAssign(force.mul(dt));
     const speed = v.length();
     If(speed.greaterThan(params.maxSpeed), () => v.assign(v.normalize().mul(params.maxSpeed)));
@@ -60,7 +56,7 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     p.assign(mod(p.add(half), params.boundsSize).sub(half));
   })().compute(count).setName('Update Particles');
 
-  // RENDER: Estética de Fuego Cósmico (Sin blanco puro)
+  // RENDER (Visuales ultra mejorados)
   const material = new THREE.SpriteNodeMaterial({
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
   });
@@ -70,25 +66,30 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
   const speedAttr = velocityBuffer.toAttribute().length();
   const speedNorm = speedAttr.div(params.maxSpeed).clamp(0.0, 1.0);
   
-  // El tamaño crece con la velocidad, pero de forma controlada
-  material.scaleNode = params.particleSize.mul(speedNorm.mul(2.5).add(0.8));
+  // Efecto de estela: Se hacen más grandes y largas al ir rápido
+  material.scaleNode = params.particleSize.mul(speedNorm.mul(4.0).add(0.6));
 
+  // Paleta Neón Térmica (Cero blanco puro)
   material.colorNode = Fn(() => {
-    // Paleta inmersiva y elegante
-    const deepBlue = color('#0A0033');   // Azul Zafiro (Lento)
-    const purple = color('#4B0082');     // Púrpura Real
-    const magenta = color('#FF007F');    // Magenta Vibrante
-    const orange = color('#FF5500');     // Naranja Atardecer (Rápido)
+    const cyan = color('#00FFFF');      // Cian eléctrico (Lento)
+    const purple = color('#8A2BE2');    // Púrpura profundo
+    const magenta = color('#FF00FF');   // Magenta vibrante
+    const red = color('#FF0033');       // Rojo neón (Rápido)
 
-    // Mezcla escalonada
-    const mix1 = mix(deepBlue, purple, speedNorm.mul(2.0).clamp(0.0, 1.0));
-    const mix2 = mix(mix1, magenta, speedNorm.sub(0.4).mul(2.0).clamp(0.0, 1.0));
-    const finalRGB = mix(mix2, orange, speedNorm.sub(0.8).mul(5.0).clamp(0.0, 1.0));
+    const mix1 = mix(cyan, purple, speedNorm.mul(2.5).clamp(0.0, 1.0));
+    const mix2 = mix(mix1, magenta, speedNorm.sub(0.4).mul(2.5).clamp(0.0, 1.0));
+    const finalRGB = mix(mix2, red, speedNorm.sub(0.7).mul(3.0).clamp(0.0, 1.0));
     
     return vec4(finalRGB, 1.0);
   })();
 
-  material.opacityNode = smoothstep(0.5, 0.0, uv().xy.sub(0.5).length()).mul(params.globalOpacity);
+  // Brillo central intenso (Hace que parezcan estrellas y no simples puntos)
+  const distToCenterUv = uv().xy.sub(0.5).length();
+  // Un núcleo sólido y un halo suave
+  const core = smoothstep(0.15, 0.0, distToCenterUv);
+  const halo = smoothstep(0.5, 0.2, distToCenterUv).mul(0.4);
+  
+  material.opacityNode = core.add(halo).mul(params.globalOpacity);
 
   const geometry = new THREE.PlaneGeometry(1, 1);
   const mesh = new THREE.InstancedMesh(geometry, material, count);

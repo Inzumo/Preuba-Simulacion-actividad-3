@@ -10,16 +10,16 @@ async function main() {
   if (!WebGPU.isAvailable()) throw new Error('Requiere WebGPU.');
 
   const scene = new THREE.Scene(); 
-  scene.background = new THREE.Color('#020005');
+  // Fondo casi negro con un levísimo tono azul
+  scene.background = new THREE.Color('#010008');
   
-  const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 1000);
-  // Alejamos un poco la cámara para que el campo de partículas llene todo el fondo
-  camera.position.set(0, 0, 35); 
+  const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 1000);
+  // Cámara lejana para efecto inmersivo
+  camera.position.set(0, 0, 45); 
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGPURenderer({ antialias: true });
-  renderer.setSize(innerWidth, innerHeight); 
-  mount.appendChild(renderer.domElement);
+  renderer.setSize(innerWidth, innerHeight); mount.appendChild(renderer.domElement);
   await renderer.init();
 
   const params = createParameters();
@@ -33,7 +33,6 @@ async function main() {
     params.radialStrength.value = r;
     params.vortexStrength.value = v;
     params.initialSpeed.value = i;
-
     params.windEnabled.value = 1;
     params.radialEnabled.value = 1;
     params.vortexEnabled.value = 1;
@@ -41,17 +40,17 @@ async function main() {
   };
 
   const applyPreset = (id) => {
-    if (id === '1') { applyForceState(0, 0, 0, 6.0); }
-    if (id === '2') { applyForceState(15.0, 0, 0, 0); }
-    if (id === '3') { applyForceState(0, 20.0, 0, 0); }
-    if (id === '4') { applyForceState(0, -20.0, 0, 0); }
-    if (id === '5') { applyForceState(0, 5.0, 25.0, 0); }
+    if (id === '1') { applyForceState(0, 0, 0, 8.0); } 
+    if (id === '2') { applyForceState(15.0, 0, 0, 0); } 
+    if (id === '3') { applyForceState(0, 25.0, 0, 0); } 
+    if (id === '4') { applyForceState(0, -25.0, 0, 0); } 
+    if (id === '5') { applyForceState(0, 5.0, 30.0, 0); } 
   };
 
   const setMode = (next) => {
     mode = next; panel.setVisible(mode === 'LAB');
     hud.innerHTML = mode === 'LAB' 
-      ? 'LAB · 1-5 Pruebas · P: PERFORMANCE' 
+      ? '<strong>LAB</strong> · 1-5 Pruebas · P: PERFORMANCE' 
       : `<strong>PERFORMANCE</strong> · ¡Toca el sistema!<br>W/S: Viento · A/D: Atracción/Repulsión<br>Q/E: Torbellino · 1-4: Explosiones · R: Reiniciar`;
   };
 
@@ -59,35 +58,34 @@ async function main() {
   setMode('LAB');
 
   const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, KeyQ: false, KeyE: false };
-  
   let pTarget = { wind: 0, radial: 10.0, vortex: 15.0 };
 
   function updatePerformanceSmoothly() {
     if (mode !== 'PERFORMANCE') return;
-    const lerpSpeed = 0.08;
+    const lerp = 0.08;
 
-    if (keys.KeyW) pTarget.wind = 30.0;
-    else if (keys.KeyS) pTarget.wind = -30.0;
+    if (keys.KeyW) pTarget.wind = 40.0;
+    else if (keys.KeyS) pTarget.wind = -40.0;
     else pTarget.wind = 0.0;
 
-    if (keys.KeyA) pTarget.radial = 40.0;
-    else if (keys.KeyD) pTarget.radial = -25.0;
+    if (keys.KeyA) pTarget.radial = 50.0;
+    else if (keys.KeyD) pTarget.radial = -30.0;
     else pTarget.radial = 10.0;
 
-    if (keys.KeyQ) pTarget.vortex = 50.0;
+    if (keys.KeyQ) pTarget.vortex = 60.0;
     else if (keys.KeyE) pTarget.vortex = 0.0;
     else pTarget.vortex = 15.0;
 
-    params.windStrength.value += (pTarget.wind - params.windStrength.value) * lerpSpeed;
-    params.radialStrength.value += (pTarget.radial - params.radialStrength.value) * lerpSpeed;
-    params.vortexStrength.value += (pTarget.vortex - params.vortexStrength.value) * lerpSpeed;
+    params.windStrength.value += (pTarget.wind - params.windStrength.value) * lerp;
+    params.radialStrength.value += (pTarget.radial - params.radialStrength.value) * lerp;
+    params.vortexStrength.value += (pTarget.vortex - params.vortexStrength.value) * lerp;
   }
 
   function triggerForceStrike(id) {
-    if (id === '1') { params.radialStrength.value = 100.0; }
-    if (id === '2') { params.windStrength.value = 80.0; }
-    if (id === '3') { params.vortexStrength.value = 120.0; }
-    if (id === '4') { params.radialStrength.value = -80.0; }
+    if (id === '1') { params.radialStrength.value = 150.0; }
+    if (id === '2') { params.windStrength.value = 120.0; }
+    if (id === '3') { params.vortexStrength.value = 180.0; }
+    if (id === '4') { params.radialStrength.value = -120.0; }
     
     setTimeout(() => {
       if (mode === 'PERFORMANCE') {
