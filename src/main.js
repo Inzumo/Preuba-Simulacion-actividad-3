@@ -23,14 +23,25 @@ async function main() {
   let mode = 'LAB', panel;
   const hud = document.createElement('div'); hud.className = 'hud'; document.body.append(hud);
 
-  // Las 4 pruebas base para el LAB
+  // --- SISTEMA DE TRANSICIÓN SUAVE ---
+  let currentState = { tension: 8.0, wind: 0.0, turb: 0.0 };
+  let targetState = { tension: 8.0, wind: 0.0, turb: 0.0 };
+
+  function setTargets(t, w, tb) {
+    targetState.tension = t;
+    targetState.wind = w;
+    targetState.turb = tb;
+  }
+
+  // Las 4 pruebas base (SIN RESET, solo cambian los targets)
   const applyPreset = (id) => {
-    params.tensionEnabled.value = 0; params.windEnabled.value = 0; params.turbEnabled.value = 0;
-    if (id === '1') { params.tensionEnabled.value = 1; params.tensionStrength.value = 15.0; }
-    if (id === '2') { params.windEnabled.value = 1; params.windStrength.value = 6.0; }
-    if (id === '3') { params.turbEnabled.value = 1; params.turbStrength.value = 8.0; }
-    if (id === '4') { params.tensionEnabled.value = 1; params.windEnabled.value = 1; params.turbEnabled.value = 1; }
-    simulation.reset();
+    if (id === '1') setTargets(15.0, 0.0, 0.0);
+    if (id === '2') setTargets(0.0, 8.0, 0.0);
+    if (id === '3') setTargets(0.0, 0.0, 12.0);
+    if (id === '4') setTargets(15.0, 8.0, 12.0);
+    
+    // Encendemos las fuerzas en la GPU
+    params.tensionEnabled.value = 1; params.windEnabled.value = 1; params.turbEnabled.value = 1;
   };
 
   const setMode = (next) => {
@@ -42,29 +53,42 @@ async function main() {
   setMode('LAB');
 
   const keys = { KeyA: false, KeyD: false, KeyQ: false, KeyE: false };
-  function updatePerformance() {
-    if (mode !== 'PERFORMANCE') return;
-    
-    // A/D: Aumenta o disminuye la Tensión (Atracción)
-    let tt = 8.0; if (keys.KeyA) tt = 30.0; else if (keys.KeyD) tt = 0.0;
-    params.tensionStrength.value += (tt - params.tensionStrength.value) * 0.1; params.tensionEnabled.value = 1;
+  
+  // Esta función se ejecuta cada frame y hace la transición suave (lerp)
+  function updateSmoothTransitions() {
+    const lerpSpeed = 0.05; // Qué tan rápido se funde. 0.05 es suave, 0.2 es rápido.
 
-    // Q/E: Aumenta o disminuye la Turbulencia
-    let ft = 0.0; if (keys.KeyQ) ft = 20.0; else if (keys.KeyE) ft = 0.0;
-    params.turbStrength.value += (ft - params.turbStrength.value) * 0.1; params.turbEnabled.value = 1;
+    // Fundido de Tensión
+    currentState.tension += (targetState.tension - currentState.tension) * lerpSpeed;
+    params.tensionStrength.value = currentState.tension;
+
+    // Fundido de Viento
+    currentState.wind += (targetState.wind - currentState.wind) * lerpSpeed;
+    params.windStrength.value = currentState.wind;
+
+    // Fundido de Turbulencia
+    currentState.turb += (targetState.turb - currentState.turb) * lerpSpeed;
+    params.turbStrength.value = currentState.turb;
+
+    // Si estamos en PERFORMANCE, el teclado sobreescribe los targets
+    if (mode === 'PERFORMANCE') {
+      if (keys.KeyA) targetState.tension = 30.0;
+      else if (keys.KeyD) targetState.tension = 0.0;
+      else targetState.tension = 8.0; // Base
+
+      if (keys.KeyQ) targetState.turb = 20.0;
+      else if (keys.KeyE) targetState.turb = 0.0;
+      else targetState.turb = 0.0; // Base
+    }
   }
 
   function triggerForceStrike(id) {
-    // 1: Onda de Choque
-    if (id === '1') { params.tensionStrength.value = 50.0; setTimeout(() => params.tensionStrength.value = 8.0, 200); }
-    // 2: Viento Huracanado
-    if (id === '2') { params.windEnabled.value = 1; params.windStrength.value = 30.0; setTimeout(() => params.windStrength.value = 0.0, 300); }
-    // 3: Terremoto de Fluidos
-    if (id === '3') { params.turbStrength.value = 40.0; params.turbEnabled.value = 1; setTimeout(() => params.turbStrength.value = 0.0, 400); }
-    // 4: Big Bang
+    if (id === '1') { targetState.tension = 50.0; setTimeout(() => targetState.tension = 8.0, 200); }
+    if (id === '2') { targetState.wind = 30.0; setTimeout(() => targetState.wind = 0.0, 300); }
+    if (id === '3') { targetState.turb = 40.0; setTimeout(() => targetState.turb = 0.0, 400); }
     if (id === '4') { 
-      params.tensionStrength.value = 0.0; params.turbStrength.value = 50.0;
-      setTimeout(() => { params.tensionStrength.value = 8.0; params.turbStrength.value = 0.0; }, 500);
+      targetState.tension = 0.0; targetState.turb = 50.0; 
+      setTimeout(() => { targetState.tension = 8.0; targetState.turb = 0.0; }, 500);
     }
   }
 
@@ -86,6 +110,11 @@ async function main() {
   addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
   simulation.reset();
-  renderer.setAnimationLoop(() => { updatePerformance(); simulation.stepSimulation(); renderer.render(scene, camera); });
+  
+  renderer.setAnimationLoop(() => { 
+    updateSmoothTransitions(); // Llamamos al fundido en cada frame
+    simulation.stepSimulation(); 
+    renderer.render(scene, camera); 
+  });
 }
 main();
