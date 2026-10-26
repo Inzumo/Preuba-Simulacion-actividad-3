@@ -24,29 +24,27 @@ async function main() {
   const hud = document.createElement('div'); hud.className = 'hud'; document.body.append(hud);
 
   // --- SISTEMA DE TRANSICIÓN SUAVE ---
-  let currentState = { tension: 8.0, wind: 0.0, turb: 0.0 };
-  let targetState = { tension: 8.0, wind: 0.0, turb: 0.0 };
+  let currentState = { wind: 0, radial: 0, vortex: 0, initialSpeed: 0 };
+  let targetState = { wind: 0, radial: 0, vortex: 0, initialSpeed: 0 };
 
-  function setTargets(t, w, tb) {
-    targetState.tension = t;
-    targetState.wind = w;
-    targetState.turb = tb;
+  function setTargets(w, r, v, i) {
+    targetState.wind = w; targetState.radial = r; targetState.vortex = v; targetState.initialSpeed = i;
   }
 
-  // Las 4 pruebas base (SIN RESET, solo cambian los targets)
   const applyPreset = (id) => {
-    if (id === '1') setTargets(15.0, 0.0, 0.0);
-    if (id === '2') setTargets(0.0, 8.0, 0.0);
-    if (id === '3') setTargets(0.0, 0.0, 12.0);
-    if (id === '4') setTargets(15.0, 8.0, 12.0);
-    
-    // Encendemos las fuerzas en la GPU
-    params.tensionEnabled.value = 1; params.windEnabled.value = 1; params.turbEnabled.value = 1;
+    params.windEnabled.value = 1; params.radialEnabled.value = 1; params.vortexEnabled.value = 1;
+    if (id === '1') { setTargets(0, 0, 0, 6.0); } 
+    if (id === '2') { setTargets(10.0, 0, 0, 0); } 
+    if (id === '3') { setTargets(0, 15.0, 0, 0); } 
+    if (id === '4') { setTargets(0, -15.0, 0, 0); } 
+    if (id === '5') { setTargets(0, 5.0, 20.0, 0); } 
   };
 
   const setMode = (next) => {
     mode = next; panel.setVisible(mode === 'LAB');
-    hud.innerHTML = mode === 'LAB' ? 'LAB · 1-4 Pruebas · P: PERFORMANCE' : 'PERFORMANCE · A/D Tensión · Q/E Turbulencia · 1-4 Detonadores';
+    hud.innerHTML = mode === 'LAB' 
+      ? 'LAB · 1-5 Pruebas · P: PERFORMANCE' 
+      : `<strong>PERFORMANCE</strong> · ¡A jugar!<br>A/D: Atracción/Repulsión · Q/E: Torbellino<br>1-4: Explosiones de energía · R: Reiniciar`;
   };
 
   panel = createLabPanel({ params, onReset: () => simulation.reset(), onPreset: applyPreset, onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB') });
@@ -54,42 +52,40 @@ async function main() {
 
   const keys = { KeyA: false, KeyD: false, KeyQ: false, KeyE: false };
   
-  // Esta función se ejecuta cada frame y hace la transición suave (lerp)
   function updateSmoothTransitions() {
-    const lerpSpeed = 0.05; // Qué tan rápido se funde. 0.05 es suave, 0.2 es rápido.
+    const lerpSpeed = 0.06;
 
-    // Fundido de Tensión
-    currentState.tension += (targetState.tension - currentState.tension) * lerpSpeed;
-    params.tensionStrength.value = currentState.tension;
-
-    // Fundido de Viento
     currentState.wind += (targetState.wind - currentState.wind) * lerpSpeed;
     params.windStrength.value = currentState.wind;
 
-    // Fundido de Turbulencia
-    currentState.turb += (targetState.turb - currentState.turb) * lerpSpeed;
-    params.turbStrength.value = currentState.turb;
+    currentState.radial += (targetState.radial - currentState.radial) * lerpSpeed;
+    params.radialStrength.value = currentState.radial;
 
-    // Si estamos en PERFORMANCE, el teclado sobreescribe los targets
+    currentState.vortex += (targetState.vortex - currentState.vortex) * lerpSpeed;
+    params.vortexStrength.value = currentState.vortex;
+
+    currentState.initialSpeed += (targetState.initialSpeed - currentState.initialSpeed) * lerpSpeed;
+
+    // PERFORMANCE: El instrumento en vivo
     if (mode === 'PERFORMANCE') {
-      if (keys.KeyA) targetState.tension = 30.0;
-      else if (keys.KeyD) targetState.tension = 0.0;
-      else targetState.tension = 8.0; // Base
+      // A/D: Atrae o Repela
+      if (keys.KeyA) targetState.radial = 40.0; 
+      else if (keys.KeyD) targetState.radial = -25.0;
+      else targetState.radial = 10.0;
 
-      if (keys.KeyQ) targetState.turb = 20.0;
-      else if (keys.KeyE) targetState.turb = 0.0;
-      else targetState.turb = 0.0; // Base
+      // Q/E: Acelera o frena el torbellino
+      if (keys.KeyQ) targetState.vortex = 40.0;
+      else if (keys.KeyE) targetState.vortex = 0.0;
+      else targetState.vortex = 15.0;
     }
   }
 
   function triggerForceStrike(id) {
-    if (id === '1') { targetState.tension = 50.0; setTimeout(() => targetState.tension = 8.0, 200); }
-    if (id === '2') { targetState.wind = 30.0; setTimeout(() => targetState.wind = 0.0, 300); }
-    if (id === '3') { targetState.turb = 40.0; setTimeout(() => targetState.turb = 0.0, 400); }
-    if (id === '4') { 
-      targetState.tension = 0.0; targetState.turb = 50.0; 
-      setTimeout(() => { targetState.tension = 8.0; targetState.turb = 0.0; }, 500);
-    }
+    // Efectos visuales explosivos al presionar números
+    if (id === '1') { targetState.radial = 80.0; setTimeout(() => targetState.radial = 10.0, 200); } // Implosión
+    if (id === '2') { targetState.wind = 50.0; setTimeout(() => targetState.wind = 0.0, 300); } // Viento Huracanado
+    if (id === '3') { targetState.vortex = 80.0; setTimeout(() => targetState.vortex = 15.0, 400); } // Latigazo
+    if (id === '4') { targetState.radial = -50.0; setTimeout(() => targetState.radial = 10.0, 300); } // Explosión
   }
 
   addEventListener('keydown', (e) => {
@@ -100,6 +96,7 @@ async function main() {
     if (mode === 'LAB') {
       if (e.code === 'Digit1') applyPreset('1'); if (e.code === 'Digit2') applyPreset('2');
       if (e.code === 'Digit3') applyPreset('3'); if (e.code === 'Digit4') applyPreset('4');
+      if (e.code === 'Digit5') applyPreset('5');
     } else {
       if (e.code === 'Digit1') triggerForceStrike('1'); if (e.code === 'Digit2') triggerForceStrike('2');
       if (e.code === 'Digit3') triggerForceStrike('3'); if (e.code === 'Digit4') triggerForceStrike('4');
@@ -112,7 +109,7 @@ async function main() {
   simulation.reset();
   
   renderer.setAnimationLoop(() => { 
-    updateSmoothTransitions(); // Llamamos al fundido en cada frame
+    updateSmoothTransitions(); 
     simulation.stepSimulation(); 
     renderer.render(scene, camera); 
   });

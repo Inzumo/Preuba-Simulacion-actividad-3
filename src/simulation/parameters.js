@@ -10,19 +10,25 @@ export function createParameters() {
     particleSize: uniform(0.04),
     globalOpacity: uniform(1.0),
 
-    // Fuerzas del Núcleo
     attractor: uniform(new THREE.Vector3(0.0, 0.0, 0.0)),
-    
-    // 1. Tensión Magnética
-    tensionEnabled: uniform(1.0),
-    tensionStrength: uniform(8.0),
-    
-    // 2. Viento Estelar
-    windEnabled: uniform(0.0),
-    windStrength: uniform(4.0),
 
-    // 3. Turbulencia de Fluidos
-    turbEnabled: uniform(0.0),
-    turbStrength: uniform(5.0)
+    // 1. Inercia (Velocidad inicial)
+    initialSpeed: uniform(0.0),
+
+    // 2. Viento (Fuerza Constante)
+    windEnabled: uniform(0.0),
+    windStrength: uniform(8.0),
+
+    // 3. Radial (Atracción/Repulsión)
+    radialEnabled: uniform(0.0),
+    radialStrength: uniform(12.0),
+
+    // 4. Vórtice
+    vortexEnabled: uniform(0.0),
+    vortexStrength: uniform(10.0),
+
+    // 5. Drag (Fricción para que no aceleren infinito)
+    dragEnabled: uniform(1.0),
+    dragCoefficient: uniform(0.08)
   };
 }
