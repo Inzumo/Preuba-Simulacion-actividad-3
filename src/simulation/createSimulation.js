@@ -20,8 +20,9 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const r5 = hash(i.add(uint(71)));
     const r6 = hash(i.add(uint(89)));
 
+    // Nacen esparcidas
     p.assign(vec3(r1, r2, r3).sub(0.5).mul(params.boundsSize.mul(0.9)));
-    v.assign(vec3(r4, r5, r6).sub(0.5).mul(5.0));
+    v.assign(vec3(r4, r5, r6).sub(0.5).mul(2.0));
   })().compute(count).setName('Initialize Particles');
 
   const updateParticles = Fn(() => {
@@ -35,59 +36,72 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const dist = max(toCenter.length(), 0.1);
     const dir = toCenter.div(dist);
 
-    // 1. TENSIÓN MAGNÉTICA (Atrae fuerte, pero es asimétrica)
+    // 1. TENSIÓN MAGNÉTICA (Atracción al núcleo)
     const tensionForce = dir.mul(params.tensionStrength).div(dist.mul(0.2).add(1.0)).mul(params.tensionEnabled);
     force.addAssign(tensionForce);
 
-    // 2. BURBUJA (Empuje cerca del centro para que no colapsen)
-    const bubblePush = smoothstep(3.0, 0.0, dist).mul(params.bubbleStrength).mul(params.bubbleEnabled);
-    force.addAssign(dir.mul(bubblePush).mul(-1.0));
+    // 2. VIENTO ESTELAR (Empuje lateral)
+    const windDir = vec3(1.0, 0.5, 0.0).normalize();
+    force.addAssign(windDir.mul(params.windStrength).mul(params.windEnabled));
 
-    // 3. TURBULENCIA DE FLUIDOS (Movimiento caótico)
-    const t = time.mul(3.0);
-    const fluidX = sin(p.y.mul(1.5).add(t)).mul(cos(p.z.mul(1.5).add(t)));
-    const fluidY = sin(p.z.mul(1.5).add(t)).mul(cos(p.x.mul(1.5).add(t)));
-    const fluidZ = sin(p.x.mul(1.5).add(t)).mul(cos(p.y.mul(1.5).add(t)));
-    force.addAssign(vec3(fluidX, fluidY, fluidZ).mul(params.fluidStrength).mul(params.fluidEnabled));
+    // 3. TURBULENCIA DE FLUIDOS (Caos)
+    const t = time.mul(2.0);
+    const turbX = sin(p.y.mul(1.5).add(t)).mul(cos(p.z.mul(1.5).add(t)));
+    const turbY = sin(p.z.mul(1.5).add(t)).mul(cos(p.x.mul(1.5).add(t)));
+    const turbZ = sin(p.x.mul(1.5).add(t)).mul(cos(p.y.mul(1.5).add(t)));
+    force.addAssign(vec3(turbX, turbY, turbZ).mul(params.turbStrength).mul(params.turbEnabled));
 
-    // Fricción base
-    force.addAssign(v.mul(-0.1));
+    // Fricción base para mantener estabilidad
+    force.addAssign(v.mul(-0.05));
 
     // INTEGRACIÓN
     v.addAssign(force.mul(dt));
+    
+    // Límite de velocidad
     const speed = v.length();
     If(speed.greaterThan(params.maxSpeed), () => v.assign(v.normalize().mul(params.maxSpeed)));
+    
     p.addAssign(v.mul(dt));
 
-    // Mantener dentro del espacio
+    // Frontera esférica
     const distFromCenter = p.length();
     If(distFromCenter.greaterThan(params.boundsSize), () => p.assign(p.normalize().mul(params.boundsSize)));
   })().compute(count).setName('Update Particles');
 
+  // RENDER: Estética de Neón y Fuego (Sin ratón)
   const material = new THREE.SpriteNodeMaterial({
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
   });
 
   material.positionNode = positionBuffer.toAttribute();
   
+  // Calculamos qué tan lejos está del centro (0 = centro, 1 = borde)
   const distToCenter = positionBuffer.toAttribute().sub(params.attractor).length();
-  // Brillo según cercanía al centro
   const coreProximity = distToCenter.div(params.boundsSize).clamp(0.0, 1.0).oneMinus();
+  
+  // Calculamos la velocidad
   const speedAttr = velocityBuffer.toAttribute().length();
   const speedNorm = speedAttr.div(params.maxSpeed).clamp(0.0, 1.0);
 
-  material.scaleNode = params.particleSize.mul(coreProximity.mul(4.0).add(1.0)).mul(speedNorm.mul(1.0).add(0.5));
+  // TAMAÑO: Las partículas se hacen gigantes si van rápido o están cerca del centro
+  material.scaleNode = params.particleSize.mul(coreProximity.mul(3.0).add(1.0)).mul(speedNorm.mul(2.0).add(0.5));
 
+  // COLOR: Núcleo Blanco -> Naranja -> Magenta -> Azul Profundo (según velocidad y centro)
   material.colorNode = Fn(() => {
-    const deepPurple = color('#1A0033');
+    const deepBlue = color('#050022');
     const magenta = color('#FF007F');
+    const orange = color('#FF5500');
     const white = color('#FFFFFF');
-    // Color según la cercanía al centro
-    const mix1 = mix(deepPurple, magenta, coreProximity.mul(2.0).clamp(0.0, 1.0));
-    const finalRGB = mix(mix1, white, coreProximity.sub(0.5).mul(2.0).clamp(0.0, 1.0));
+
+    // Si van rápido, brillan más
+    const mix1 = mix(deepBlue, magenta, speedNorm.mul(2.0).clamp(0.0, 1.0));
+    const mix2 = mix(mix1, orange, coreProximity.mul(2.0).clamp(0.0, 1.0));
+    const finalRGB = mix(mix2, white, coreProximity.mul(speedNorm).mul(4.0).clamp(0.0, 1.0));
+
     return vec4(finalRGB, 1.0);
   })();
 
+  // Forma circular suave y brillante
   material.opacityNode = smoothstep(0.5, 0.0, uv().xy.sub(0.5).length()).mul(params.globalOpacity);
 
   const geometry = new THREE.PlaneGeometry(1, 1);

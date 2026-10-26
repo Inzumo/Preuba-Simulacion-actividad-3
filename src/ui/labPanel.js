@@ -1,26 +1,27 @@
-function button(parent, label, onClick) {
-  const b = document.createElement('button'); b.textContent = label;
-  b.addEventListener('click', onClick); parent.append(b); return b;
-}
-
 export function createLabPanel({ params, onReset, onPreset, onModeChange }) {
   const panel = document.createElement('aside'); panel.className = 'panel';
-  panel.innerHTML = `<h1>⚡ Colapso Estelar</h1><p>LAB de pruebas. <strong>P</strong> para interpretar.</p>`;
+  panel.innerHTML = `
+    <h1>⚡ Núcleo de Plasma</h1>
+    <p>Aísla las fuerzas. <strong>P</strong> para interpretar.</p>
+    <div class="group"><h2>Pruebas de Fuerza</h2>
+      <button id="b1">1 · Tensión Magnética</button>
+      <button id="b2">2 · Viento Estelar</button>
+      <button id="b3">3 · Turbulencia Caótica</button>
+      <button id="b4">4 · Supernova (Todo)</button>
+    </div>
+    <div class="group"><h2>Acciones</h2>
+      <button id="br">Reiniciar (R)</button>
+      <button id="bp">Ir a PERFORMANCE (P)</button>
+    </div>
+  `;
+  
+  panel.querySelector('#b1').onclick = () => onPreset('1');
+  panel.querySelector('#b2').onclick = () => onPreset('2');
+  panel.querySelector('#b3').onclick = () => onPreset('3');
+  panel.querySelector('#b4').onclick = () => onPreset('4');
+  panel.querySelector('#br').onclick = onReset;
+  panel.querySelector('#bp').onclick = onModeChange;
 
-  const tests = document.createElement('div'); tests.className = 'group';
-  tests.innerHTML = '<h2>Fuerzas</h2>';
-  panel.append(tests);
-  for (const [id, label] of [
-    ['1', '1 · Tensión Magnética'], 
-    ['2', '2 · Burbuja de Repulsión'], 
-    ['3', '3 · Turbulencia de Fluidos'], 
-    ['4', '4 · Colapso Total']
-  ]) button(tests, label, () => onPreset(id));
-
-  const actions = document.createElement('div'); actions.className = 'group';
-  actions.innerHTML = '<h2>Acciones</h2>'; panel.append(actions);
-  button(actions, 'Reiniciar (R)', onReset);
-  button(actions, 'Ir a PERFORMANCE (P)', () => onModeChange());
   document.body.append(panel);
   return { element: panel, setVisible: (v) => panel.classList.toggle('hidden', !v), refresh: () => {} };
 }
