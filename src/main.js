@@ -31,6 +31,7 @@ async function main() {
     targetState.wind = w; targetState.radial = r; targetState.vortex = v; targetState.initialSpeed = i;
   }
 
+  // Las 5 pruebas base para el LAB
   const applyPreset = (id) => {
     params.windEnabled.value = 1; params.radialEnabled.value = 1; params.vortexEnabled.value = 1;
     if (id === '1') { setTargets(0, 0, 0, 6.0); } 
@@ -44,13 +45,13 @@ async function main() {
     mode = next; panel.setVisible(mode === 'LAB');
     hud.innerHTML = mode === 'LAB' 
       ? 'LAB · 1-5 Pruebas · P: PERFORMANCE' 
-      : `<strong>PERFORMANCE</strong> · ¡A jugar!<br>A/D: Atracción/Repulsión · Q/E: Torbellino<br>1-4: Explosiones de energía · R: Reiniciar`;
+      : `<strong>PERFORMANCE</strong> · ¡Toca el sistema!<br>W/S: Viento · A/D: Atracción/Repulsión<br>Q/E: Torbellino · 1-4: Explosiones · R: Reiniciar`;
   };
 
   panel = createLabPanel({ params, onReset: () => simulation.reset(), onPreset: applyPreset, onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB') });
   setMode('LAB');
 
-  const keys = { KeyA: false, KeyD: false, KeyQ: false, KeyE: false };
+  const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, KeyQ: false, KeyE: false };
   
   function updateSmoothTransitions() {
     const lerpSpeed = 0.06;
@@ -64,28 +65,31 @@ async function main() {
     currentState.vortex += (targetState.vortex - currentState.vortex) * lerpSpeed;
     params.vortexStrength.value = currentState.vortex;
 
-    currentState.initialSpeed += (targetState.initialSpeed - currentState.initialSpeed) * lerpSpeed;
-
-    // PERFORMANCE: El instrumento en vivo
+    // PERFORMANCE: Control en vivo con el teclado
     if (mode === 'PERFORMANCE') {
-      // A/D: Atrae o Repela
-      if (keys.KeyA) targetState.radial = 40.0; 
+      // W/S: Viento (+X / -X)
+      if (keys.KeyW) targetState.wind = 30.0;
+      else if (keys.KeyS) targetState.wind = -30.0;
+      else targetState.wind = 0.0;
+
+      // A/D: Atracción / Repulsión
+      if (keys.KeyA) targetState.radial = 40.0;
       else if (keys.KeyD) targetState.radial = -25.0;
       else targetState.radial = 10.0;
 
-      // Q/E: Acelera o frena el torbellino
-      if (keys.KeyQ) targetState.vortex = 40.0;
+      // Q/E: Vórtice
+      if (keys.KeyQ) targetState.vortex = 50.0;
       else if (keys.KeyE) targetState.vortex = 0.0;
       else targetState.vortex = 15.0;
     }
   }
 
   function triggerForceStrike(id) {
-    // Efectos visuales explosivos al presionar números
-    if (id === '1') { targetState.radial = 80.0; setTimeout(() => targetState.radial = 10.0, 200); } // Implosión
-    if (id === '2') { targetState.wind = 50.0; setTimeout(() => targetState.wind = 0.0, 300); } // Viento Huracanado
-    if (id === '3') { targetState.vortex = 80.0; setTimeout(() => targetState.vortex = 15.0, 400); } // Latigazo
-    if (id === '4') { targetState.radial = -50.0; setTimeout(() => targetState.radial = 10.0, 300); } // Explosión
+    // Golpes de fuerza en PERFORMANCE (Números)
+    if (id === '1') { targetState.radial = 80.0; setTimeout(() => targetState.radial = 10.0, 200); } 
+    if (id === '2') { targetState.wind = 60.0; setTimeout(() => targetState.wind = 0.0, 300); } 
+    if (id === '3') { targetState.vortex = 100.0; setTimeout(() => targetState.vortex = 15.0, 400); } 
+    if (id === '4') { targetState.radial = -60.0; setTimeout(() => targetState.radial = 10.0, 300); } 
   }
 
   addEventListener('keydown', (e) => {

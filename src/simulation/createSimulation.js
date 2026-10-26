@@ -37,18 +37,16 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const zAxis = vec3(0.0, 0.0, 1.0);
     const tangent = zAxis.cross(dir);
 
-    // 1. VIENTO
-    const windDir = vec3(1.0, 0.0, 0.0);
-    force.addAssign(windDir.mul(params.windStrength).mul(params.windEnabled));
+    // 1. VIENTO (Fuerza +X)
+    force.addAssign(vec3(1.0, 0.0, 0.0).mul(params.windStrength).mul(params.windEnabled));
 
-    // 2. RADIAL
-    const radialForce = dir.mul(params.radialStrength).div(dist.mul(0.5).add(1.0)).mul(params.radialEnabled);
-    force.addAssign(radialForce);
+    // 2. RADIAL (Atracción/Repulsión)
+    force.addAssign(dir.mul(params.radialStrength).div(dist.mul(0.5).add(1.0)).mul(params.radialEnabled));
 
-    // 3. VÓRTICE
+    // 3. VÓRTICE (Giro)
     force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
 
-    // 4. DRAG
+    // 4. DRAG (Fricción)
     force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
 
     // INTEGRACIÓN
@@ -71,24 +69,19 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
   const speedAttr = velocityBuffer.toAttribute().length();
   const speedNorm = speedAttr.div(params.maxSpeed).clamp(0.0, 1.0);
   
-  // TAMAÑO: Partículas más grandes si van rápido (parecen estelas)
-  material.scaleNode = params.particleSize.mul(speedNorm.mul(4.0).add(0.5));
+  material.scaleNode = params.particleSize.mul(speedNorm.mul(5.0).add(0.5));
 
-  // COLOR TÉRMICO: Azul profundo -> Magenta -> Naranja -> Blanco
   material.colorNode = Fn(() => {
     const deepBlue = color('#0A0033');
     const magenta = color('#FF007F');
-    const orange = color('#FF5500');
     const white = color('#FFFFFF');
     
-    const mix1 = mix(deepBlue, magenta, speedNorm.mul(2.5).clamp(0.0, 1.0));
-    const mix2 = mix(mix1, orange, speedNorm.sub(0.4).mul(2.5).clamp(0.0, 1.0));
-    const finalRGB = mix(mix2, white, speedNorm.sub(0.7).mul(3.0).clamp(0.0, 1.0));
+    const mix1 = mix(deepBlue, magenta, speedNorm.mul(2.0).clamp(0.0, 1.0));
+    const finalRGB = mix(mix1, white, speedNorm.sub(0.6).mul(2.5).clamp(0.0, 1.0));
     
     return vec4(finalRGB, 1.0);
   })();
 
-  // FORMA DE LA PARTÍCULA: Degradado circular brillante
   material.opacityNode = smoothstep(0.5, 0.0, uv().xy.sub(0.5).length()).mul(params.globalOpacity);
 
   const geometry = new THREE.PlaneGeometry(1, 1);

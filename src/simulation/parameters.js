@@ -12,7 +12,7 @@ export function createParameters() {
 
     attractor: uniform(new THREE.Vector3(0.0, 0.0, 0.0)),
 
-    // 1. Inercia (Velocidad inicial)
+    // 1. Inercia
     initialSpeed: uniform(0.0),
 
     // 2. Viento (Fuerza Constante)
@@ -27,7 +27,7 @@ export function createParameters() {
     vortexEnabled: uniform(0.0),
     vortexStrength: uniform(10.0),
 
-    // 5. Drag (Fricción para que no aceleren infinito)
+    // 5. Drag (Fricción)
     dragEnabled: uniform(1.0),
     dragCoefficient: uniform(0.08)
   };
