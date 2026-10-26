@@ -23,22 +23,27 @@ async function main() {
   let mode = 'LAB', panel;
   const hud = document.createElement('div'); hud.className = 'hud'; document.body.append(hud);
 
-  // --- SISTEMA DE TRANSICIÓN SUAVE ---
-  let currentState = { wind: 0, radial: 0, vortex: 0, initialSpeed: 0 };
-  let targetState = { wind: 0, radial: 0, vortex: 0, initialSpeed: 0 };
+  // --- FUNCIÓN PARA CAMBIAR FUERZAS DIRECTAMENTE (Sin lag) ---
+  const applyForceState = (w, r, v, i) => {
+    params.windStrength.value = w;
+    params.radialStrength.value = r;
+    params.vortexStrength.value = v;
+    params.initialSpeed.value = i;
 
-  function setTargets(w, r, v, i) {
-    targetState.wind = w; targetState.radial = r; targetState.vortex = v; targetState.initialSpeed = i;
-  }
+    // Encendemos todas las fuerzas (el valor 0 hace que no afecten)
+    params.windEnabled.value = 1;
+    params.radialEnabled.value = 1;
+    params.vortexEnabled.value = 1;
+    params.dragEnabled.value = 1;
+  };
 
   // Las 5 pruebas base para el LAB
   const applyPreset = (id) => {
-    params.windEnabled.value = 1; params.radialEnabled.value = 1; params.vortexEnabled.value = 1;
-    if (id === '1') { setTargets(0, 0, 0, 6.0); } 
-    if (id === '2') { setTargets(10.0, 0, 0, 0); } 
-    if (id === '3') { setTargets(0, 15.0, 0, 0); } 
-    if (id === '4') { setTargets(0, -15.0, 0, 0); } 
-    if (id === '5') { setTargets(0, 5.0, 20.0, 0); } 
+    if (id === '1') { applyForceState(0, 0, 0, 6.0); }       // Inercia
+    if (id === '2') { applyForceState(15.0, 0, 0, 0); }      // Viento
+    if (id === '3') { applyForceState(0, 20.0, 0, 0); }      // Atracción
+    if (id === '4') { applyForceState(0, -20.0, 0, 0); }     // Repulsión
+    if (id === '5') { applyForceState(0, 5.0, 25.0, 0); }    // Vórtice
   };
 
   const setMode = (next) => {
@@ -53,43 +58,50 @@ async function main() {
 
   const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, KeyQ: false, KeyE: false };
   
-  function updateSmoothTransitions() {
-    const lerpSpeed = 0.06;
+  // Variables para el suavizado en PERFORMANCE
+  let pTarget = { wind: 0, radial: 10.0, vortex: 15.0 };
 
-    currentState.wind += (targetState.wind - currentState.wind) * lerpSpeed;
-    params.windStrength.value = currentState.wind;
+  function updatePerformanceSmoothly() {
+    if (mode !== 'PERFORMANCE') return;
+    
+    const lerpSpeed = 0.08;
 
-    currentState.radial += (targetState.radial - currentState.radial) * lerpSpeed;
-    params.radialStrength.value = currentState.radial;
+    // W/S: Viento
+    if (keys.KeyW) pTarget.wind = 30.0;
+    else if (keys.KeyS) pTarget.wind = -30.0;
+    else pTarget.wind = 0.0;
 
-    currentState.vortex += (targetState.vortex - currentState.vortex) * lerpSpeed;
-    params.vortexStrength.value = currentState.vortex;
+    // A/D: Atracción / Repulsión
+    if (keys.KeyA) pTarget.radial = 40.0;
+    else if (keys.KeyD) pTarget.radial = -25.0;
+    else pTarget.radial = 10.0;
 
-    // PERFORMANCE: Control en vivo con el teclado
-    if (mode === 'PERFORMANCE') {
-      // W/S: Viento (+X / -X)
-      if (keys.KeyW) targetState.wind = 30.0;
-      else if (keys.KeyS) targetState.wind = -30.0;
-      else targetState.wind = 0.0;
+    // Q/E: Vórtice
+    if (keys.KeyQ) pTarget.vortex = 50.0;
+    else if (keys.KeyE) pTarget.vortex = 0.0;
+    else pTarget.vortex = 15.0;
 
-      // A/D: Atracción / Repulsión
-      if (keys.KeyA) targetState.radial = 40.0;
-      else if (keys.KeyD) targetState.radial = -25.0;
-      else targetState.radial = 10.0;
-
-      // Q/E: Vórtice
-      if (keys.KeyQ) targetState.vortex = 50.0;
-      else if (keys.KeyE) targetState.vortex = 0.0;
-      else targetState.vortex = 15.0;
-    }
+    // Suavizado matemático
+    params.windStrength.value += (pTarget.wind - params.windStrength.value) * lerpSpeed;
+    params.radialStrength.value += (pTarget.radial - params.radialStrength.value) * lerpSpeed;
+    params.vortexStrength.value += (pTarget.vortex - params.vortexStrength.value) * lerpSpeed;
   }
 
   function triggerForceStrike(id) {
-    // Golpes de fuerza en PERFORMANCE (Números)
-    if (id === '1') { targetState.radial = 80.0; setTimeout(() => targetState.radial = 10.0, 200); } 
-    if (id === '2') { targetState.wind = 60.0; setTimeout(() => targetState.wind = 0.0, 300); } 
-    if (id === '3') { targetState.vortex = 100.0; setTimeout(() => targetState.vortex = 15.0, 400); } 
-    if (id === '4') { targetState.radial = -60.0; setTimeout(() => targetState.radial = 10.0, 300); } 
+    // Explosiones rápidas usando el teclado (No bloquean el sistema)
+    if (id === '1') { params.radialStrength.value = 100.0; }
+    if (id === '2') { params.windStrength.value = 80.0; }
+    if (id === '3') { params.vortexStrength.value = 120.0; }
+    if (id === '4') { params.radialStrength.value = -80.0; }
+    
+    // Después de un instante, volvemos al estado normal
+    setTimeout(() => {
+      if (mode === 'PERFORMANCE') {
+        params.radialStrength.value = 10.0;
+        params.windStrength.value = 0.0;
+        params.vortexStrength.value = 15.0;
+      }
+    }, 300);
   }
 
   addEventListener('keydown', (e) => {
@@ -110,10 +122,11 @@ async function main() {
   addEventListener('keyup', (e) => { if (e.code in keys) keys[e.code] = false; });
   addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
 
-  simulation.reset();
-  
+  // Iniciamos en modo Viento por defecto
+  applyForceState(0, 0, 0, 2.0);
+
   renderer.setAnimationLoop(() => { 
-    updateSmoothTransitions(); 
+    updatePerformanceSmoothly(); // Solo actúa en PERFORMANCE
     simulation.stepSimulation(); 
     renderer.render(scene, camera); 
   });
