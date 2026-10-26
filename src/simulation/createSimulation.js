@@ -20,7 +20,8 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const r5 = hash(i.add(uint(71)));
     const r6 = hash(i.add(uint(89)));
 
-    p.assign(vec3(r1, r2, r3).sub(0.5).mul(params.boundsSize.mul(0.9)));
+    // Partículas más esparcidas por toda la pantalla
+    p.assign(vec3(r1, r2, r3).sub(0.5).mul(params.boundsSize.mul(1.2)));
     v.assign(vec3(r4, r5, r6).sub(0.5).mul(params.initialSpeed));
   })().compute(count).setName('Initialize Particles');
 
@@ -37,16 +38,16 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     const zAxis = vec3(0.0, 0.0, 1.0);
     const tangent = zAxis.cross(dir);
 
-    // 1. VIENTO (Fuerza +X)
+    // 1. VIENTO
     force.addAssign(vec3(1.0, 0.0, 0.0).mul(params.windStrength).mul(params.windEnabled));
 
-    // 2. RADIAL (Atracción/Repulsión)
+    // 2. RADIAL
     force.addAssign(dir.mul(params.radialStrength).div(dist.mul(0.5).add(1.0)).mul(params.radialEnabled));
 
-    // 3. VÓRTICE (Giro)
+    // 3. VÓRTICE
     force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
 
-    // 4. DRAG (Fricción)
+    // 4. DRAG
     force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
 
     // INTEGRACIÓN
@@ -59,7 +60,7 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     p.assign(mod(p.add(half), params.boundsSize).sub(half));
   })().compute(count).setName('Update Particles');
 
-  // RENDER ESTÉTICO (Fuego y Galaxia)
+  // RENDER: Estética de Fuego Cósmico (Sin blanco puro)
   const material = new THREE.SpriteNodeMaterial({
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true
   });
@@ -69,15 +70,20 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
   const speedAttr = velocityBuffer.toAttribute().length();
   const speedNorm = speedAttr.div(params.maxSpeed).clamp(0.0, 1.0);
   
-  material.scaleNode = params.particleSize.mul(speedNorm.mul(5.0).add(0.5));
+  // El tamaño crece con la velocidad, pero de forma controlada
+  material.scaleNode = params.particleSize.mul(speedNorm.mul(2.5).add(0.8));
 
   material.colorNode = Fn(() => {
-    const deepBlue = color('#0A0033');
-    const magenta = color('#FF007F');
-    const white = color('#FFFFFF');
-    
-    const mix1 = mix(deepBlue, magenta, speedNorm.mul(2.0).clamp(0.0, 1.0));
-    const finalRGB = mix(mix1, white, speedNorm.sub(0.6).mul(2.5).clamp(0.0, 1.0));
+    // Paleta inmersiva y elegante
+    const deepBlue = color('#0A0033');   // Azul Zafiro (Lento)
+    const purple = color('#4B0082');     // Púrpura Real
+    const magenta = color('#FF007F');    // Magenta Vibrante
+    const orange = color('#FF5500');     // Naranja Atardecer (Rápido)
+
+    // Mezcla escalonada
+    const mix1 = mix(deepBlue, purple, speedNorm.mul(2.0).clamp(0.0, 1.0));
+    const mix2 = mix(mix1, magenta, speedNorm.sub(0.4).mul(2.0).clamp(0.0, 1.0));
+    const finalRGB = mix(mix2, orange, speedNorm.sub(0.8).mul(5.0).clamp(0.0, 1.0));
     
     return vec4(finalRGB, 1.0);
   })();
