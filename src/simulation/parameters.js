@@ -29,6 +29,14 @@ export function createParameters() {
     vortexStrength: uniform(10.0),
 
     dragEnabled: uniform(1.0),
-    dragCoefficient: uniform(0.08)
+    dragCoefficient: uniform(0.08),
+
+    // 5. TURBULENCIA (fuerza propia)
+    // F = A * ( sin(k*y + w*t), sin(k*z + 1.3*w*t + 2.1), sin(k*x + 0.7*w*t + 4.2) )
+    turbulenceEnabled: uniform(1.0),
+    turbulenceStrength: uniform(0.0), // A: amplitud (0 = fuerza apagada)
+    turbulenceScale: uniform(0.15),   // k: rad/unidad; el "tamaño" de los remolinos es ~ 2*pi/k
+    turbulenceSpeed: uniform(0.6),    // w: rad/s; qué tan rápido cambia el campo
+    simTime: uniform(0.0)             // t: tiempo de simulación, lo avanza stepSimulation
   };
 }

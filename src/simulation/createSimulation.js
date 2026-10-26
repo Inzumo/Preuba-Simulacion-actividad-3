@@ -49,6 +49,17 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
     force.addAssign(tangent.mul(params.vortexStrength).mul(params.vortexEnabled));
     // 4. DRAG
     force.addAssign(v.mul(params.dragCoefficient).mul(params.dragEnabled).mul(-1.0));
+    // 5. TURBULENCIA: campo que depende de la posición y del tiempo.
+    // Cada componente depende de OTRA coordenada, así que la divergencia es cero:
+    // no hay "fuentes" ni "sumideros" y el campo no empuja al conjunto hacia ningún lado.
+    const k = params.turbulenceScale;
+    const wt = params.turbulenceSpeed.mul(params.simTime);
+    const turb = vec3(
+      sin(p.y.mul(k).add(wt)),
+      sin(p.z.mul(k).add(wt.mul(1.3)).add(2.1)),
+      sin(p.x.mul(k).add(wt.mul(0.7)).add(4.2))
+    );
+    force.addAssign(turb.mul(params.turbulenceStrength).mul(params.turbulenceEnabled));
 
     v.addAssign(force.mul(dt));
     const speed = v.length();
@@ -132,8 +143,11 @@ export function createSimulation({ renderer, scene, params, count = 131072 }) {
 
   return {
     count, positionBuffer, velocityBuffer,
-    reset: () => renderer.compute(initParticles),
-    stepSimulation: () => renderer.compute(updateParticles),
+    reset: () => { params.simTime.value = 0.0; renderer.compute(initParticles); },
+    stepSimulation: () => {
+      params.simTime.value += params.dt.value * params.timeScale.value;
+      renderer.compute(updateParticles);
+    },
     dispose: () => { geometry.dispose(); material.dispose(); scene.remove(mesh); }
   };
 }

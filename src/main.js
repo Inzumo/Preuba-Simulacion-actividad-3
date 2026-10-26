@@ -48,8 +48,10 @@ async function main() {
   let mode = 'LAB', panel;
   const hud = document.createElement('div'); hud.className = 'hud'; document.body.append(hud);
 
-  const applyForceState = (w, r, v, i) => {
+  const applyForceState = (w, r, v, i, t = 0) => {
     params.windStrength.value = w;
+    params.turbulenceStrength.value = t;
+    params.turbulenceEnabled.value = 1;
     params.radialStrength.value = r;
     params.vortexStrength.value = v;
     params.initialSpeed.value = i;
@@ -65,13 +67,14 @@ async function main() {
     if (id === '3') { applyForceState(0, 25.0, 0, 0); }
     if (id === '4') { applyForceState(0, -25.0, 0, 0); }
     if (id === '5') { applyForceState(0, 5.0, 30.0, 0); }
+    if (id === '6') { applyForceState(0, 0, 0, 0, 12.0); }
   };
 
   const setMode = (next) => {
     mode = next; panel.setVisible(mode === 'LAB');
     hud.innerHTML = mode === 'LAB'
-      ? '<strong>LAB</strong> · 1-5 Pruebas · P: PERFORMANCE'
-      : `<strong>PERFORMANCE</strong> · ¡Toca el sistema!<br>W/S: Viento · A/D: Atracción/Repulsión<br>Q/E: Torbellino · 1-4: Explosiones · R: Reiniciar`;
+      ? '<strong>LAB</strong> · 1-6 Pruebas · P: PERFORMANCE'
+      : `<strong>PERFORMANCE</strong> · ¡Toca el sistema!<br>W/S: Viento · A/D: Atracción/Repulsión<br>Q/E: Torbellino · T/G: Turbulencia · 1-4: Explosiones · R: Reiniciar`;
   };
 
   panel = createLabPanel({
@@ -82,8 +85,8 @@ async function main() {
   });
   setMode('LAB');
 
-  const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, KeyQ: false, KeyE: false };
-  let pTarget = { wind: 0, radial: 10.0, vortex: 15.0 };
+  const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, KeyQ: false, KeyE: false, KeyT: false, KeyG: false };
+  let pTarget = { wind: 0, radial: 10.0, vortex: 15.0, turb: 4.0 };
 
   function updatePerformanceSmoothly() {
     if (mode !== 'PERFORMANCE') return;
@@ -101,6 +104,11 @@ async function main() {
     else if (keys.KeyE) pTarget.vortex = 0.0;
     else pTarget.vortex = 15.0;
 
+    if (keys.KeyT) pTarget.turb = 30.0;
+    else if (keys.KeyG) pTarget.turb = 0.0;
+    else pTarget.turb = 4.0;
+
+    params.turbulenceStrength.value += (pTarget.turb - params.turbulenceStrength.value) * lerp;
     params.windStrength.value += (pTarget.wind - params.windStrength.value) * lerp;
     params.radialStrength.value += (pTarget.radial - params.radialStrength.value) * lerp;
     params.vortexStrength.value += (pTarget.vortex - params.vortexStrength.value) * lerp;
@@ -120,6 +128,7 @@ async function main() {
         params.radialStrength.value = 10.0;
         params.windStrength.value = 0.0;
         params.vortexStrength.value = 15.0;
+        params.turbulenceStrength.value = 4.0;
       }
     }, 300);
   }
@@ -135,6 +144,7 @@ async function main() {
       if (e.code === 'Digit3') applyPreset('3');
       if (e.code === 'Digit4') applyPreset('4');
       if (e.code === 'Digit5') applyPreset('5');
+      if (e.code === 'Digit6') applyPreset('6');
     } else {
       if (e.code === 'Digit1') triggerForceStrike('1');
       if (e.code === 'Digit2') triggerForceStrike('2');
