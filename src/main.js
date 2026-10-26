@@ -9,20 +9,40 @@ async function main() {
   const mount = document.querySelector('#app');
   if (!WebGPU.isAvailable()) throw new Error('Requiere WebGPU.');
 
-  const scene = new THREE.Scene(); 
+  const scene = new THREE.Scene();
   // Fondo casi negro con un levísimo tono azul
   scene.background = new THREE.Color('#010008');
-  
+
   const camera = new THREE.PerspectiveCamera(65, innerWidth / innerHeight, 0.1, 1000);
-  // Cámara lejana para efecto inmersivo
-  camera.position.set(0, 0, 45); 
+  camera.position.set(0, 0, 45);
   camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGPURenderer({ antialias: true });
-  renderer.setSize(innerWidth, innerHeight); mount.appendChild(renderer.domElement);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  mount.appendChild(renderer.domElement);
   await renderer.init();
 
+  // Viñeta: oscurece suavemente los bordes para dar profundidad (no afecta el rendimiento de la simulación)
+  const vignette = document.createElement('div');
+  Object.assign(vignette.style, {
+    position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '1',
+    background: 'radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(1,0,12,0.65) 100%)'
+  });
+  document.body.append(vignette);
+
   const params = createParameters();
+
+  // Ajusta el volumen de partículas a lo que realmente ve la cámara.
+  // Antes boundsSize era 22: las partículas quedaban en un cuadro pequeño al centro.
+  function fitBounds() {
+    const depth = params.boundsSize.value.z;
+    const farthest = camera.position.z + depth / 2;           // plano más lejano
+    const h = 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * farthest;
+    params.boundsSize.value.set(h * camera.aspect, h, depth);
+  }
+  fitBounds();
+
   const simulation = createSimulation({ renderer, scene, params });
 
   let mode = 'LAB', panel;
@@ -40,21 +60,26 @@ async function main() {
   };
 
   const applyPreset = (id) => {
-    if (id === '1') { applyForceState(0, 0, 0, 8.0); } 
-    if (id === '2') { applyForceState(15.0, 0, 0, 0); } 
-    if (id === '3') { applyForceState(0, 25.0, 0, 0); } 
-    if (id === '4') { applyForceState(0, -25.0, 0, 0); } 
-    if (id === '5') { applyForceState(0, 5.0, 30.0, 0); } 
+    if (id === '1') { applyForceState(0, 0, 0, 8.0); }
+    if (id === '2') { applyForceState(15.0, 0, 0, 0); }
+    if (id === '3') { applyForceState(0, 25.0, 0, 0); }
+    if (id === '4') { applyForceState(0, -25.0, 0, 0); }
+    if (id === '5') { applyForceState(0, 5.0, 30.0, 0); }
   };
 
   const setMode = (next) => {
     mode = next; panel.setVisible(mode === 'LAB');
-    hud.innerHTML = mode === 'LAB' 
-      ? '<strong>LAB</strong> · 1-5 Pruebas · P: PERFORMANCE' 
+    hud.innerHTML = mode === 'LAB'
+      ? '<strong>LAB</strong> · 1-5 Pruebas · P: PERFORMANCE'
       : `<strong>PERFORMANCE</strong> · ¡Toca el sistema!<br>W/S: Viento · A/D: Atracción/Repulsión<br>Q/E: Torbellino · 1-4: Explosiones · R: Reiniciar`;
   };
 
-  panel = createLabPanel({ params, onReset: () => simulation.reset(), onPreset: applyPreset, onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB') });
+  panel = createLabPanel({
+    params,
+    onReset: () => simulation.reset(),
+    onPreset: applyPreset,
+    onModeChange: () => setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB')
+  });
   setMode('LAB');
 
   const keys = { KeyW: false, KeyS: false, KeyA: false, KeyD: false, KeyQ: false, KeyE: false };
@@ -81,13 +106,16 @@ async function main() {
     params.vortexStrength.value += (pTarget.vortex - params.vortexStrength.value) * lerp;
   }
 
+  let strikeTimer = null;
   function triggerForceStrike(id) {
     if (id === '1') { params.radialStrength.value = 150.0; }
     if (id === '2') { params.windStrength.value = 120.0; }
     if (id === '3') { params.vortexStrength.value = 180.0; }
     if (id === '4') { params.radialStrength.value = -120.0; }
-    
-    setTimeout(() => {
+
+    // Evita que un timer viejo apague una explosión nueva
+    clearTimeout(strikeTimer);
+    strikeTimer = setTimeout(() => {
       if (mode === 'PERFORMANCE') {
         params.radialStrength.value = 10.0;
         params.windStrength.value = 0.0;
@@ -100,30 +128,42 @@ async function main() {
     if (e.code in keys) { keys[e.code] = true; return; }
     if (e.code === 'KeyP') { setMode(mode === 'LAB' ? 'PERFORMANCE' : 'LAB'); return; }
     if (e.code === 'KeyR') { simulation.reset(); return; }
-    
+
     if (mode === 'LAB') {
-      if (e.code === 'Digit1') applyPreset('1'); if (e.code === 'Digit2') applyPreset('2');
-      if (e.code === 'Digit3') applyPreset('3'); if (e.code === 'Digit4') applyPreset('4');
+      if (e.code === 'Digit1') applyPreset('1');
+      if (e.code === 'Digit2') applyPreset('2');
+      if (e.code === 'Digit3') applyPreset('3');
+      if (e.code === 'Digit4') applyPreset('4');
       if (e.code === 'Digit5') applyPreset('5');
     } else {
-      if (e.code === 'Digit1') triggerForceStrike('1'); if (e.code === 'Digit2') triggerForceStrike('2');
-      if (e.code === 'Digit3') triggerForceStrike('3'); if (e.code === 'Digit4') triggerForceStrike('4');
+      if (e.code === 'Digit1') triggerForceStrike('1');
+      if (e.code === 'Digit2') triggerForceStrike('2');
+      if (e.code === 'Digit3') triggerForceStrike('3');
+      if (e.code === 'Digit4') triggerForceStrike('4');
     }
   });
 
   addEventListener('keyup', (e) => { if (e.code in keys) keys[e.code] = false; });
-  addEventListener('resize', () => { 
-    camera.aspect = innerWidth / innerHeight; 
-    camera.updateProjectionMatrix(); 
-    renderer.setSize(innerWidth, innerHeight); 
+
+  let resizeTimer = null;
+  addEventListener('resize', () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    fitBounds();
+    // Reparte de nuevo las partículas en el nuevo volumen (con pausa para no hacerlo en cada píxel)
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => simulation.reset(), 200);
   });
 
   applyForceState(0, 0, 0, 2.0);
+  // Antes no había reset inicial: todas las partículas empezaban en el origen hasta pulsar R
+  simulation.reset();
 
-  renderer.setAnimationLoop(() => { 
-    updatePerformanceSmoothly(); 
-    simulation.stepSimulation(); 
-    renderer.render(scene, camera); 
+  renderer.setAnimationLoop(() => {
+    updatePerformanceSmoothly();
+    simulation.stepSimulation();
+    renderer.render(scene, camera);
   });
 }
 main();
